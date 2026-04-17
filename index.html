@@ -1,0 +1,3030 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>쥬라기 서바이벌 — Isla Nublar Protocol</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Major+Mono+Display&family=Rubik+Mono+One&family=VT323&display=swap');
+
+  :root {
+    --amber: #ffb703;
+    --amber-hot: #ff8500;
+    --emerald: #0d4f3c;
+    --emerald-dark: #061c15;
+    --blood: #d62828;
+    --bone: #f4e7c1;
+    --warn: #ffcd29;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; color: var(--bone); font-family: 'VT323', monospace; user-select: none; -webkit-user-select: none; touch-action: none; }
+  canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; cursor: crosshair; }
+
+  /* CRT scanline overlay */
+  #scanlines {
+    position: fixed; inset: 0; pointer-events: none; z-index: 50;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.15) 0px, rgba(0,0,0,0.15) 1px, transparent 1px, transparent 3px);
+    mix-blend-mode: multiply;
+  }
+  #vignette {
+    position: fixed; inset: 0; pointer-events: none; z-index: 49;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.6) 100%);
+  }
+
+  /* HUD */
+  #hud {
+    position: fixed; top: 0; left: 0; right: 0; padding: 14px 18px; z-index: 20;
+    display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none;
+    font-family: 'VT323', monospace;
+  }
+  .hud-block {
+    background: rgba(6, 28, 21, 0.85);
+    border: 1px solid var(--amber);
+    padding: 6px 12px;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.5), inset 0 0 12px rgba(255,183,3,0.12);
+    color: var(--amber);
+    letter-spacing: 1px;
+  }
+  .hud-label { font-size: 11px; color: var(--bone); opacity: 0.6; letter-spacing: 2px; display:block; }
+  .hud-value { font-size: 22px; line-height: 1; }
+  #hp-bar { width: 180px; height: 10px; background: #1a0505; border: 1px solid var(--amber); margin-top: 4px; overflow: hidden; }
+  #hp-fill { height: 100%; background: linear-gradient(90deg, var(--blood), #ff6b6b); transition: width .15s linear; }
+  #ammo-bar { width: 120px; height: 6px; background: #1a0505; margin-top: 4px; }
+  #ammo-fill { height: 100%; background: var(--amber); }
+
+  /* Mobile controls */
+  #joystick {
+    position: fixed; bottom: 40px; left: 30px; width: 140px; height: 140px;
+    border: 2px solid rgba(255,183,3,0.4); border-radius: 50%;
+    background: rgba(6,28,21,0.3); z-index: 30; display: none;
+    touch-action: none;
+  }
+  #joystick-inner {
+    position: absolute; top: 50%; left: 50%; width: 60px; height: 60px;
+    border-radius: 50%; background: rgba(255,183,3,0.7);
+    box-shadow: 0 0 20px rgba(255,183,3,0.5);
+    transform: translate(-50%, -50%);
+    transition: transform .05s linear;
+  }
+  #shootstick {
+    position: fixed; bottom: 40px; right: 30px; width: 140px; height: 140px;
+    border: 2px solid rgba(214,40,40,0.5); border-radius: 50%;
+    background: rgba(28,6,6,0.3); z-index: 30; display: none;
+    touch-action: none;
+  }
+  #shootstick-inner {
+    position: absolute; top: 50%; left: 50%; width: 60px; height: 60px;
+    border-radius: 50%; background: rgba(214,40,40,0.7);
+    box-shadow: 0 0 20px rgba(214,40,40,0.5);
+    transform: translate(-50%, -50%);
+  }
+  .touch-mode #joystick, .touch-mode #shootstick { display: block; }
+
+  /* Weapons bar */
+  #weapons-bar {
+    position: fixed;
+    top: 96px; left: 50%; transform: translateX(-50%);
+    z-index: 25; display: flex; gap: 4px;
+    font-family: 'VT323', monospace;
+    pointer-events: auto;
+  }
+  .wbtn {
+    background: rgba(6,28,21,0.88);
+    border: 1px solid rgba(255,183,3,0.3);
+    color: var(--bone);
+    padding: 4px 10px 5px;
+    min-width: 62px;
+    display: flex; flex-direction: column; align-items: center;
+    cursor: pointer;
+    transition: transform .1s, border-color .15s, background .15s, box-shadow .15s;
+    font-family: inherit;
+    position: relative;
+  }
+  .wbtn:active { transform: scale(0.93); }
+  .wbtn.active {
+    border-color: var(--amber);
+    background: rgba(255,183,3,0.18);
+    box-shadow: 0 0 14px rgba(255,183,3,0.35), inset 0 0 8px rgba(255,183,3,0.15);
+  }
+  .wbtn.active::before {
+    content: ''; position: absolute; top: -4px; left: 50%; transform: translateX(-50%);
+    width: 20px; height: 2px; background: var(--amber);
+    box-shadow: 0 0 6px var(--amber);
+  }
+  .wbtn.empty .wammo { color: var(--blood) !important; }
+  .wbtn .wkey {
+    font-size: 10px; color: var(--amber); opacity: 0.7;
+    line-height: 1; letter-spacing: 1px;
+  }
+  .wbtn .wicon {
+    font-size: 18px; line-height: 1; color: var(--amber);
+    margin-top: 1px; text-shadow: 0 0 4px rgba(255,183,3,0.4);
+  }
+  .wbtn .wname {
+    font-size: 12px; color: var(--bone);
+    letter-spacing: 1px; line-height: 1; margin-top: 3px;
+  }
+  .wbtn .wammo {
+    font-size: 13px; color: var(--amber);
+    line-height: 1; margin-top: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+  @media (max-width: 520px) {
+    #weapons-bar { top: 90px; gap: 3px; }
+    .wbtn { min-width: 54px; padding: 3px 5px 4px; }
+    .wbtn .wname { font-size: 10px; letter-spacing: 0.5px; }
+    .wbtn .wammo { font-size: 11px; }
+    .wbtn .wicon { font-size: 15px; }
+  }
+
+  /* Exit-open banner */
+  #exit-banner {
+    position: fixed; left: 50%; top: 172px;
+    transform: translateX(-50%) translateY(-16px);
+    background: rgba(0, 40, 20, 0.92);
+    border: 2px solid #00ff66;
+    padding: 8px 22px;
+    color: #00ff66;
+    font-family: 'VT323', monospace;
+    font-size: 17px; letter-spacing: 2px;
+    z-index: 26;
+    opacity: 0;
+    transition: opacity .4s, transform .4s;
+    pointer-events: none;
+    box-shadow: 0 0 24px rgba(0, 255, 102, 0.55);
+    display: flex; gap: 12px; align-items: center; white-space: nowrap;
+  }
+  #exit-banner.show {
+    opacity: 1; transform: translateX(-50%) translateY(0);
+    animation: banner-pulse 1.3s ease-in-out infinite;
+  }
+  @keyframes banner-pulse {
+    0%, 100% { box-shadow: 0 0 22px rgba(0, 255, 102, 0.55); border-color: #00ff66; }
+    50% { box-shadow: 0 0 42px rgba(255, 205, 41, 0.85); border-color: #ffcd29; color: #ffcd29; }
+  }
+  #exit-banner .ba { color: #ffcd29; font-weight: bold; }
+  @media (max-width: 520px) {
+    #exit-banner { top: 158px; font-size: 14px; padding: 6px 14px; gap: 8px; }
+  }
+
+  /* Overlay screens */
+  .overlay {
+    position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 30% 20%, rgba(13,79,60,0.25), rgba(0,0,0,0.95));
+    padding: 20px;
+  }
+  .overlay.hidden { display: none; }
+  .panel {
+    max-width: 520px; width: 100%;
+    background: linear-gradient(180deg, rgba(6,28,21,0.95), rgba(0,0,0,0.95));
+    border: 2px solid var(--amber);
+    padding: 32px 24px;
+    box-shadow: 0 0 40px rgba(255,183,3,0.25), inset 0 0 40px rgba(13,79,60,0.3);
+    position: relative;
+  }
+  .panel::before {
+    content: ''; position: absolute; inset: 6px; border: 1px solid rgba(255,183,3,0.25); pointer-events: none;
+  }
+  .title {
+    font-family: 'Rubik Mono One', monospace;
+    font-size: clamp(28px, 7vw, 44px);
+    color: var(--amber); text-align: center;
+    letter-spacing: 2px;
+    text-shadow: 0 0 20px var(--amber-hot), 2px 2px 0 var(--blood);
+    margin-bottom: 8px;
+    line-height: 1.1;
+  }
+  .subtitle { text-align: center; color: var(--bone); opacity: 0.7; letter-spacing: 4px; font-size: 14px; margin-bottom: 24px; }
+  .dino-stamp { text-align: center; font-family: 'Major Mono Display', monospace; font-size: 12px; color: var(--emerald); letter-spacing: 3px; margin-bottom: 16px; }
+  .btn {
+    display: block; width: 100%; padding: 14px;
+    background: var(--amber); color: #000;
+    font-family: 'Rubik Mono One', monospace; font-size: 16px;
+    border: none; letter-spacing: 3px; cursor: pointer;
+    box-shadow: 4px 4px 0 #000, 4px 4px 0 2px var(--amber-hot);
+    transition: transform .08s, box-shadow .08s;
+    margin-top: 12px;
+  }
+  .btn:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 #000; }
+  .btn.danger { background: var(--blood); color: var(--bone); box-shadow: 4px 4px 0 #000, 4px 4px 0 2px #8b0000; }
+  .btn.ghost { background: transparent; color: var(--amber); border: 2px solid var(--amber); box-shadow: none; }
+
+  .story { color: var(--bone); font-size: 18px; line-height: 1.5; margin-bottom: 20px; padding: 12px; background: rgba(13,79,60,0.2); border-left: 3px solid var(--emerald); }
+  .warn-bar { background: repeating-linear-gradient(45deg, var(--warn) 0 16px, #000 16px 32px); height: 18px; margin: 16px -24px; }
+  .controls-hint { color: var(--bone); font-size: 16px; opacity: 0.7; margin-top: 12px; line-height: 1.6; }
+  .controls-hint b { color: var(--amber); }
+
+  /* Upgrade cards */
+  .upgrade-grid { display: grid; gap: 10px; margin-top: 16px; }
+  .upcard {
+    background: rgba(13,79,60,0.25); border: 1px solid var(--emerald);
+    padding: 14px; cursor: pointer; transition: all .15s;
+    display: flex; gap: 14px; align-items: center;
+  }
+  .upcard:hover { border-color: var(--amber); background: rgba(255,183,3,0.1); transform: translateX(4px); }
+  .upcard .icon { font-size: 28px; width: 40px; text-align: center; }
+  .upcard .name { color: var(--amber); font-size: 20px; letter-spacing: 1px; }
+  .upcard .desc { color: var(--bone); opacity: 0.75; font-size: 14px; }
+
+  /* DNA shop inside upgrade screen */
+  .shop-section {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px dashed rgba(255, 183, 3, 0.3);
+  }
+  .shop-title {
+    font-family: 'VT323', monospace;
+    font-size: 16px; letter-spacing: 3px;
+    color: var(--amber);
+    margin-bottom: 10px; text-align: center;
+  }
+  .shop-title .dna-tag {
+    color: #00ffcc; margin-left: 14px; font-size: 14px;
+  }
+  #shop-items { display: grid; gap: 7px; }
+  .shop-card {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 183, 3, 0.3);
+    padding: 10px 12px;
+    display: flex; align-items: center; gap: 12px;
+    cursor: pointer;
+    transition: all .15s;
+    position: relative;
+  }
+  .shop-card:hover:not(.broke) {
+    border-color: var(--amber);
+    background: rgba(255, 183, 3, 0.1);
+    transform: translateX(3px);
+  }
+  .shop-card.broke { opacity: 0.55; cursor: not-allowed; }
+  .shop-card .s-icon {
+    font-size: 22px; color: var(--amber);
+    width: 32px; text-align: center; line-height: 1;
+  }
+  .shop-card .s-info { flex: 1; }
+  .shop-card .s-name { color: var(--bone); font-size: 17px; letter-spacing: 1px; }
+  .shop-card .s-desc { color: var(--bone); opacity: 0.65; font-size: 13px; margin-top: 2px; }
+  .shop-card .s-price {
+    color: #00ffcc; font-size: 17px;
+    font-family: 'VT323', monospace; font-weight: bold;
+    min-width: 76px; text-align: right;
+  }
+  .shop-card.broke .s-price { color: var(--blood); }
+  @keyframes broke-shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-5px); }
+    40% { transform: translateX(5px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(3px); }
+  }
+  .shop-card.broke-shake { animation: broke-shake 0.4s; }
+
+  /* Boss warning */
+  #boss-warning {
+    position: fixed; inset: 0; z-index: 90; display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.6);
+    animation: flicker 0.12s steps(2) infinite;
+  }
+  #boss-warning.show { display: flex; }
+  @keyframes flicker { 0%,100%{background: rgba(214,40,40,0.15);} 50%{background: rgba(0,0,0,0.8);} }
+  .boss-text {
+    font-family: 'Rubik Mono One', monospace;
+    font-size: clamp(32px, 9vw, 64px);
+    color: var(--blood); text-align: center;
+    text-shadow: 0 0 30px var(--blood), 4px 4px 0 #000;
+    letter-spacing: 4px;
+  }
+  .boss-sub { color: var(--warn); letter-spacing: 8px; font-size: 18px; margin-top: 8px; text-align: center; }
+
+  /* Floor indicator */
+  #floor-indicator {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    font-family: 'Rubik Mono One', monospace; font-size: clamp(40px, 10vw, 80px);
+    color: var(--amber); text-shadow: 0 0 30px var(--amber-hot);
+    z-index: 85; pointer-events: none; opacity: 0; letter-spacing: 4px;
+    transition: opacity .5s;
+  }
+  #floor-indicator.show { opacity: 1; }
+
+  /* Boss HP bar */
+  #boss-hp {
+    position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
+    width: min(600px, 80vw); z-index: 20; display: none;
+    font-family: 'VT323', monospace;
+  }
+  #boss-hp.show { display: block; }
+  #boss-hp .label { color: var(--blood); font-size: 18px; letter-spacing: 4px; text-align: center; text-shadow: 0 0 10px var(--blood); }
+  #boss-hp .bar { height: 14px; background: #1a0505; border: 2px solid var(--blood); margin-top: 4px; overflow: hidden; box-shadow: 0 0 20px rgba(214,40,40,0.4); }
+  #boss-hp .fill { height: 100%; background: linear-gradient(90deg, #8b0000, var(--blood), #ff6b6b); transition: width .2s; }
+
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+  .stat { background: rgba(0,0,0,0.4); border: 1px solid var(--emerald); padding: 8px; }
+  .stat .k { font-size: 12px; color: var(--bone); opacity: 0.6; letter-spacing: 2px; }
+  .stat .v { font-size: 22px; color: var(--amber); }
+
+  @media (pointer: coarse), (max-width: 900px) {
+    body { touch-action: none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="vignette"></div>
+<div id="scanlines"></div>
+
+<div id="hud">
+  <div class="hud-block">
+    <span class="hud-label">HP / 생체신호</span>
+    <div class="hud-value" id="hp-text">100</div>
+    <div id="hp-bar"><div id="hp-fill" style="width:100%"></div></div>
+  </div>
+  <div class="hud-block" style="text-align:center;">
+    <span class="hud-label">구역 / SECTOR</span>
+    <div class="hud-value" id="floor-text">01</div>
+  </div>
+  <div class="hud-block" style="text-align:right;">
+    <span class="hud-label">DNA · 잔탄</span>
+    <div class="hud-value"><span id="dna-text">0</span> · <span id="ammo-text">30</span></div>
+    <div id="ammo-bar"><div id="ammo-fill" style="width:100%"></div></div>
+  </div>
+</div>
+
+<div id="joystick"><div id="joystick-inner"></div></div>
+<div id="shootstick"><div id="shootstick-inner"></div></div>
+
+<div id="weapons-bar">
+  <div class="wbtn active" data-w="rifle" onclick="switchWeapon('rifle')">
+    <span class="wkey">[1]</span><span class="wicon">▬</span>
+    <span class="wname">라이플</span><span class="wammo">30/30</span>
+  </div>
+  <div class="wbtn" data-w="shotgun" onclick="switchWeapon('shotgun')">
+    <span class="wkey">[2]</span><span class="wicon">⬚</span>
+    <span class="wname">산탄총</span><span class="wammo">6/6</span>
+  </div>
+  <div class="wbtn" data-w="smg" onclick="switchWeapon('smg')">
+    <span class="wkey">[3]</span><span class="wicon">▤</span>
+    <span class="wname">기관단총</span><span class="wammo">60/60</span>
+  </div>
+  <div class="wbtn" data-w="dual" onclick="switchWeapon('dual')">
+    <span class="wkey">[4]</span><span class="wicon">⟨⟩</span>
+    <span class="wname">쌍권총</span><span class="wammo">24/24</span>
+  </div>
+  <div class="wbtn" data-w="sniper" style="display:none;" onclick="switchWeapon('sniper')">
+    <span class="wkey">[5]</span><span class="wicon">◊</span>
+    <span class="wname">저격</span><span class="wammo">8/8</span>
+  </div>
+  <div class="wbtn" data-w="flame" style="display:none;" onclick="switchWeapon('flame')">
+    <span class="wkey">[6]</span><span class="wicon">≈</span>
+    <span class="wname">화염</span><span class="wammo">130/130</span>
+  </div>
+</div>
+
+<div id="exit-banner">
+  <span class="ba">▼</span>
+  <span>EXIT 개방 · 탈출구로 이동</span>
+  <span class="ba">▼</span>
+</div>
+
+<div id="boss-hp">
+  <div class="label" id="boss-name">BOSS</div>
+  <div class="bar"><div class="fill" id="boss-fill" style="width:100%"></div></div>
+</div>
+
+<div id="floor-indicator"></div>
+
+<div id="boss-warning">
+  <div>
+    <div class="boss-text" id="boss-warning-name">ALERT</div>
+    <div class="boss-sub">LARGE ASSET BREACH</div>
+  </div>
+</div>
+
+<!-- Title screen -->
+<div class="overlay" id="screen-title">
+  <div class="panel">
+    <div class="dino-stamp">◆ INGEN FIELD UNIT ◆</div>
+    <div class="title">쥬라기<br>서바이벌</div>
+    <div class="subtitle">ISLA NUBLAR PROTOCOL</div>
+    <div class="warn-bar"></div>
+    <div class="story">
+      시스템 붕괴 37시간 경과. 섬 전역의 격리 구역이 해제되었다.<br>
+      당신은 InGen 현장 요원. 통제실까지 <b>10개 구역</b>을 돌파하라.<br><br>
+      <span style="color:var(--amber)">● 초식공룡</span>은 먼저 공격하지 않지만, 건드리면 돌격한다.<br>
+      <span style="color:var(--blood)">● 육식공룡</span>은 시야에 들어오는 즉시 추격한다.
+    </div>
+    <div class="controls-hint" id="control-hint-desktop">
+      <b>WASD</b> 이동 · <b>마우스</b> 조준 · <b>클릭</b> 발사<br>
+      <b>Space</b> 구르기 · <b>R</b> 재장전 · <b>1~4</b> 무기 전환
+    </div>
+    <div class="controls-hint" id="control-hint-touch" style="display:none;">
+      <b>왼쪽 스틱</b> 이동 · <b>오른쪽 스틱</b> 조준 & 발사<br>
+      <b>화면 두 번 탭</b> 구르기 · <b>상단 탭 버튼</b>으로 무기 전환
+    </div>
+    <button class="btn danger" onclick="startGame()">진입 개시</button>
+  </div>
+</div>
+
+<!-- Upgrade screen -->
+<div class="overlay hidden" id="screen-upgrade">
+  <div class="panel">
+    <div class="dino-stamp">◆ 구역 돌파 · DNA 수거 완료 ◆</div>
+    <div class="title" style="font-size:28px;">업그레이드</div>
+    <div class="subtitle">UPLINK ACQUIRED</div>
+    <div class="stats-grid">
+      <div class="stat"><div class="k">HP</div><div class="v" id="up-hp">100</div></div>
+      <div class="stat"><div class="k">데미지</div><div class="v" id="up-dmg">20</div></div>
+      <div class="stat"><div class="k">연사속도</div><div class="v" id="up-rate">x1.0</div></div>
+      <div class="stat"><div class="k">탄창</div><div class="v" id="up-mag">30</div></div>
+    </div>
+    <div class="upgrade-grid" id="upgrade-choices"></div>
+    <div class="shop-section" id="shop-section">
+      <div class="shop-title">
+        ◆ DNA 무기고 ◆ <span class="dna-tag" id="shop-dna">0 DNA 보유</span>
+      </div>
+      <div id="shop-items"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Death screen -->
+<div class="overlay hidden" id="screen-dead">
+  <div class="panel">
+    <div class="dino-stamp" style="color:var(--blood);">◆ 신호 단절 ◆</div>
+    <div class="title" style="color:var(--blood);">전사</div>
+    <div class="subtitle">ASSET CONSUMED</div>
+    <div class="story" id="death-reason">당신은 공룡에게 먹혔다.</div>
+    <div class="stats-grid">
+      <div class="stat"><div class="k">도달 구역</div><div class="v" id="dead-floor">1</div></div>
+      <div class="stat"><div class="k">DNA 수거</div><div class="v" id="dead-dna">0</div></div>
+    </div>
+    <button class="btn danger" onclick="resetGame()">재진입</button>
+  </div>
+</div>
+
+<!-- Victory screen -->
+<div class="overlay hidden" id="screen-win">
+  <div class="panel">
+    <div class="dino-stamp">◆ CONTAINMENT RESTORED ◆</div>
+    <div class="title">생환</div>
+    <div class="subtitle">HELICOPTER EVAC</div>
+    <div class="story">통제실 복구 완료. 섬을 벗어났다.<br>하지만 바다 건너 샌디에이고 항구에서... 뭔가가 울부짖었다.</div>
+    <div class="stats-grid">
+      <div class="stat"><div class="k">최종 DNA</div><div class="v" id="win-dna">0</div></div>
+      <div class="stat"><div class="k">처치 수</div><div class="v" id="win-kills">0</div></div>
+    </div>
+    <button class="btn" onclick="resetGame()">다시 플레이</button>
+  </div>
+</div>
+
+<script>
+// =============================================================
+//   JURASSIC SURVIVAL — Single-file Roguelike
+// =============================================================
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+function resize() {
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize); resize();
+
+// ---------- Touch detection ----------
+const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+if (isTouch) {
+  document.body.classList.add('touch-mode');
+  document.getElementById('control-hint-desktop').style.display = 'none';
+  document.getElementById('control-hint-touch').style.display = 'block';
+}
+
+// ---------- Utility ----------
+const rand = (a, b) => a + Math.random() * (b - a);
+const irand = (a, b) => Math.floor(rand(a, b + 1));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
+const lerp = (a, b, t) => a + (b - a) * t;
+const angleTo = (ax, ay, bx, by) => Math.atan2(by - ay, bx - ax);
+function vibrate(ms) { if (navigator.vibrate) navigator.vibrate(ms); }
+
+// ---------- Game state ----------
+const TILE = 48;
+const ARENA_W = 24, ARENA_H = 16;
+const MAP_W = ARENA_W * TILE, MAP_H = ARENA_H * TILE;
+
+const state = {
+  scene: 'title', // title | play | upgrade | dead | win
+  floor: 1,
+  dna: 0,
+  kills: 0,
+  camera: { x: 0, y: 0, shake: 0 },
+  tiles: [],
+  player: null,
+  enemies: [],
+  projectiles: [],
+  particles: [],
+  pickups: [],
+  doorOpen: false,
+  bossActive: false,
+  bossRef: null,
+  flashText: null,
+};
+
+// ---------- Input ----------
+const keys = {};
+const mouse = { x: W/2, y: H/2, down: false };
+const touch = {
+  move: { active: false, id: -1, ox: 0, oy: 0, x: 0, y: 0 },
+  shoot: { active: false, id: -1, ox: 0, oy: 0, x: 0, y: 0 },
+  lastTap: 0,
+};
+
+window.addEventListener('keydown', e => {
+  keys[e.key.toLowerCase()] = true;
+  if (e.key === ' ') { dodge(); e.preventDefault(); }
+  if (e.key.toLowerCase() === 'r') reload();
+  if (e.key === '1') switchWeapon('rifle');
+  if (e.key === '2') switchWeapon('shotgun');
+  if (e.key === '3') switchWeapon('smg');
+  if (e.key === '4') switchWeapon('dual');
+  if (e.key === '5') switchWeapon('sniper');
+  if (e.key === '6') switchWeapon('flame');
+  if (e.key.toLowerCase() === 'q') cycleWeapon(-1);
+  if (e.key.toLowerCase() === 'e') cycleWeapon(1);
+});
+
+function refreshWeaponsBar() {
+  const p = state.player;
+  for (const wk of Object.keys(WEAPONS)) {
+    const btn = document.querySelector(`.wbtn[data-w="${wk}"]`);
+    if (!btn) continue;
+    const unlocked = !WEAPONS[wk].cost || (p && p.unlocked[wk]);
+    btn.style.display = unlocked ? 'flex' : 'none';
+  }
+}
+
+function buyWeapon(wk) {
+  const p = state.player;
+  const w = WEAPONS[wk];
+  if (!p || !w || !w.cost || p.unlocked[wk]) return;
+  if (state.dna < w.cost) {
+    vibrate([50, 40, 50]);
+    const card = document.querySelector(`.shop-card[data-w="${wk}"]`);
+    if (card) { card.classList.add('broke-shake'); setTimeout(() => card.classList.remove('broke-shake'), 400); }
+    return;
+  }
+  state.dna -= w.cost;
+  p.unlocked[wk] = true;
+  p.ammo[wk] = maxAmmoFor(p, wk);
+  vibrate([30, 20, 80]);
+  refreshWeaponsBar();
+  showUpgradeScreen();  // re-render shop+stats
+  updateHUD();
+  // auto-equip new purchase
+  setTimeout(() => { switchWeapon(wk); }, 50);
+}
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+canvas.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+canvas.addEventListener('mousedown', e => { mouse.down = true; });
+canvas.addEventListener('mouseup', e => { mouse.down = false; });
+
+// Touch controls
+function setupStick(elId, innerId, stick) {
+  const el = document.getElementById(elId);
+  const inner = document.getElementById(innerId);
+  el.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    stick.active = true; stick.id = t.identifier;
+    const r = el.getBoundingClientRect();
+    stick.ox = r.left + r.width/2; stick.oy = r.top + r.height/2;
+    stick.x = t.clientX - stick.ox; stick.y = t.clientY - stick.oy;
+    updateStick(inner, stick);
+  }, { passive: false });
+  window.addEventListener('touchmove', e => {
+    if (!stick.active) return;
+    for (const t of e.changedTouches) {
+      if (t.identifier === stick.id) {
+        stick.x = t.clientX - stick.ox; stick.y = t.clientY - stick.oy;
+        const d = Math.hypot(stick.x, stick.y);
+        if (d > 60) { stick.x = stick.x / d * 60; stick.y = stick.y / d * 60; }
+        updateStick(inner, stick);
+      }
+    }
+  }, { passive: false });
+  window.addEventListener('touchend', e => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === stick.id) {
+        stick.active = false; stick.id = -1; stick.x = 0; stick.y = 0;
+        inner.style.transform = 'translate(-50%, -50%)';
+      }
+    }
+  });
+}
+function updateStick(inner, s) {
+  inner.style.transform = `translate(calc(-50% + ${s.x}px), calc(-50% + ${s.y}px))`;
+}
+setupStick('joystick', 'joystick-inner', touch.move);
+setupStick('shootstick', 'shootstick-inner', touch.shoot);
+
+// Double-tap anywhere for dodge on mobile
+canvas.addEventListener('touchstart', e => {
+  const now = Date.now();
+  if (now - touch.lastTap < 280) dodge();
+  touch.lastTap = now;
+});
+
+// ============================================================
+//   PLAYER
+// ============================================================
+function newPlayer() {
+  // init per-weapon ammo pools and unlock state
+  const ammo = {}, baseMaxAmmo = {}, reloading = {}, unlocked = {};
+  for (const k of Object.keys(WEAPONS)) {
+    ammo[k] = WEAPONS[k].maxAmmo;
+    baseMaxAmmo[k] = WEAPONS[k].maxAmmo;
+    reloading[k] = 0;
+    unlocked[k] = !WEAPONS[k].cost;  // free weapons unlocked by default
+  }
+  return {
+    x: MAP_W/2, y: MAP_H/2,
+    vx: 0, vy: 0, r: 14,
+    hp: 100, maxHp: 100,
+    speed: 3.2, angle: 0,
+
+    // Weapon system
+    weapon: 'rifle',
+    ammo, baseMaxAmmo, reloading, unlocked,
+    shootCd: 0, dualSide: 0, swapCd: 0,
+
+    // Upgrade multipliers
+    damageMul: 1,
+    fireRateMul: 1,     // higher = faster fire
+    reloadMul: 1,       // lower = faster reload
+    bulletSpeedMul: 1,
+    bulletPierce: 0,
+    ammoMul: 1,
+
+    // Dodging
+    invuln: 0, dodgeCd: 0, dodgeActive: 0, iframes: 0,
+    walkCycle: 0, flash: 0, stepTimer: 0,
+  };
+}
+
+function maxAmmoFor(p, w) {
+  return Math.floor(p.baseMaxAmmo[w] * p.ammoMul);
+}
+
+function dodge() {
+  const p = state.player;
+  if (!p || p.dodgeCd > 0) return;
+  // direction from movement or facing
+  let mx = 0, my = 0;
+  if (keys['w']||keys['arrowup']) my -= 1;
+  if (keys['s']||keys['arrowdown']) my += 1;
+  if (keys['a']||keys['arrowleft']) mx -= 1;
+  if (keys['d']||keys['arrowright']) mx += 1;
+  if (touch.move.active) { mx = touch.move.x; my = touch.move.y; }
+  const d = Math.hypot(mx, my);
+  if (d < 0.1) { mx = Math.cos(p.angle); my = Math.sin(p.angle); }
+  else { mx /= d; my /= d; }
+  p.vx = mx * 14; p.vy = my * 14;
+  p.dodgeCd = 700; p.dodgeActive = 220; p.iframes = 220;
+  vibrate(25);
+  for (let i = 0; i < 12; i++) {
+    spawnParticle(p.x, p.y, rand(-2,2), rand(-2,2), '#ffb703', rand(200,400), rand(2,4));
+  }
+}
+
+function reload() {
+  const p = state.player;
+  if (!p) return;
+  const wk = p.weapon;
+  const w = WEAPONS[wk];
+  const mx = maxAmmoFor(p, wk);
+  if (p.reloading[wk] > 0 || p.ammo[wk] >= mx) return;
+  p.reloading[wk] = w.reloadTime * p.reloadMul;
+  vibrate(20);
+}
+
+function switchWeapon(name) {
+  const p = state.player;
+  if (!p || !WEAPONS[name] || p.weapon === name || p.swapCd > 0) return;
+  if (!p.unlocked[name]) return;  // locked
+  p.weapon = name;
+  p.swapCd = 180;
+  p.shootCd = Math.max(p.shootCd, 140);
+  vibrate(12);
+  updateHUD();
+}
+
+function cycleWeapon(dir) {
+  const p = state.player;
+  if (!p) return;
+  const keys = Object.keys(WEAPONS);
+  const i = keys.indexOf(p.weapon);
+  const next = keys[(i + dir + keys.length) % keys.length];
+  switchWeapon(next);
+}
+
+function shoot() {
+  const p = state.player;
+  const wk = p.weapon;
+  const w = WEAPONS[wk];
+  if (p.shootCd > 0 || p.reloading[wk] > 0 || p.swapCd > 0) return;
+  if (p.ammo[wk] <= 0) { reload(); return; }
+
+  const a = p.angle;
+  const muzzleDist = 18;
+
+  // Dual pistols alternating perpendicular offset
+  let perpOff = 0;
+  if (w.alternate) {
+    perpOff = (p.dualSide === 0) ? -6 : 6;
+    p.dualSide = 1 - p.dualSide;
+  }
+  const mx = p.x + Math.cos(a) * muzzleDist - Math.sin(a) * perpOff;
+  const my = p.y + Math.sin(a) * muzzleDist + Math.cos(a) * perpOff;
+
+  const bulletSpeed = w.bulletSpeed * p.bulletSpeedMul;
+  const dmg = w.damage * p.damageMul;
+
+  for (let i = 0; i < w.bullets; i++) {
+    let bulletA;
+    if (w.bullets > 1) {
+      // evenly fan out across spread, then small jitter
+      const t = (i - (w.bullets - 1) / 2) / Math.max(1, w.bullets - 1);
+      bulletA = a + t * w.spread * 2 + (Math.random() - 0.5) * w.spread * 0.2;
+    } else {
+      bulletA = a + (Math.random() - 0.5) * w.spread;
+    }
+    state.projectiles.push({
+      x: mx, y: my,
+      vx: Math.cos(bulletA) * bulletSpeed,
+      vy: Math.sin(bulletA) * bulletSpeed,
+      dmg,
+      life: w.bulletLife,
+      pierce: p.bulletPierce + (w.bulletPierce || 0),
+      hit: new Set(),
+      friendly: true,
+      r: w.hitRadius,
+      color: w.bulletColor,
+      weapon: wk,
+      flame: !!w.flame,
+    });
+  }
+
+  p.shootCd = w.fireRate / p.fireRateMul;
+  p.ammo[wk]--;
+  p.vx -= Math.cos(a) * w.kick;
+  p.vy -= Math.sin(a) * w.kick;
+
+  // muzzle flash particles
+  const flashCount = w.bullets > 1 ? 10 : 4;
+  for (let i = 0; i < flashCount; i++) {
+    spawnParticle(mx, my,
+      Math.cos(a)*rand(2,6)+rand(-1.5,1.5),
+      Math.sin(a)*rand(2,6)+rand(-1.5,1.5),
+      w.bulletColor, 150, rand(2,4));
+  }
+  state.camera.shake = Math.max(state.camera.shake, w.bullets > 1 ? 5 : 2);
+  vibrate(w.bullets > 1 ? 18 : 8);
+}
+
+// ============================================================
+//   WEAPONS
+// ============================================================
+const WEAPONS = {
+  rifle: {
+    name: '택티컬 라이플', short: '라이플', icon: '▬',
+    damage: 22, fireRate: 180, spread: 0.03, bullets: 1,
+    maxAmmo: 30, reloadTime: 900, bulletSpeed: 10, bulletLife: 900,
+    bulletColor: '#ffe066', hitRadius: 4, kick: 0.8,
+  },
+  shotgun: {
+    name: '산탄총', short: '산탄', icon: '⬚',
+    damage: 9, fireRate: 620, spread: 0.45, bullets: 7,
+    maxAmmo: 6, reloadTime: 1400, bulletSpeed: 11, bulletLife: 420,
+    bulletColor: '#ff8500', hitRadius: 3, kick: 2.4,
+  },
+  smg: {
+    name: '기관단총', short: '기관단총', icon: '▤',
+    damage: 8, fireRate: 75, spread: 0.1, bullets: 1,
+    maxAmmo: 60, reloadTime: 1100, bulletSpeed: 11, bulletLife: 800,
+    bulletColor: '#ffcd29', hitRadius: 3, kick: 0.35,
+  },
+  dual: {
+    name: '쌍권총', short: '쌍권총', icon: '⟨⟩',
+    damage: 15, fireRate: 95, spread: 0.04, bullets: 1, alternate: true,
+    maxAmmo: 24, reloadTime: 700, bulletSpeed: 10.5, bulletLife: 850,
+    bulletColor: '#ffd23f', hitRadius: 3.5, kick: 0.55,
+  },
+  sniper: {
+    name: '저격소총', short: '저격', icon: '◊',
+    damage: 70, fireRate: 620, spread: 0.004, bullets: 1,
+    maxAmmo: 8, reloadTime: 1400, bulletSpeed: 22, bulletLife: 1500,
+    bulletColor: '#00ffcc', hitRadius: 3, kick: 3.2,
+    bulletPierce: 3,   // built-in pierce
+    cost: 240,
+  },
+  flame: {
+    name: '화염방사기', short: '화염', icon: '≈',
+    damage: 3.8, fireRate: 38, spread: 0.32, bullets: 1,
+    maxAmmo: 130, reloadTime: 1700, bulletSpeed: 6, bulletLife: 380,
+    bulletColor: '#ff4500', hitRadius: 7, kick: 0.15,
+    flame: true,
+    cost: 340,
+  },
+};
+
+// ============================================================
+//   SECTORS & BIOMES
+// ============================================================
+const SECTOR_NAMES = {
+  1: { ko: '정찰 구역',       en: 'RECON PERIMETER',  flavor: '격리 실패 신호 수신.' },
+  2: { ko: '번식지',           en: 'BREEDING GROUND',  flavor: '덤불 속에서 발소리가 겹친다.' },
+  3: { ko: '격리 실패',        en: 'CONTAINMENT BREACH', flavor: '울타리는 이미 녹아내렸다.' },
+  4: { ko: '동쪽 습지',        en: 'EASTERN MARSH',    flavor: '물 아래로 가라앉은 차량들.' },
+  5: { ko: '폐쇄 관광로',      en: 'ABANDONED TOUR',   flavor: '기념품 가게의 전구만이 깜빡인다.' },
+  6: { ko: '수변 격납고',      en: 'WATERFRONT VAULT', flavor: '수면에 등지느러미가 스친다.' },
+  7: { ko: 'InGen 연구동',      en: 'INGEN RESEARCH',   flavor: '출입 로그: 72시간 전 정지됨.' },
+  8: { ko: '냉동 보관소',      en: 'CRYO VAULT',       flavor: '콘센트 하나가 빠져 있다.' },
+  9: { ko: '유전자 실험장',    en: 'HYBRID CHAMBER',   flavor: '카메라에 찍혀선 안 될 무언가.' },
+  10:{ ko: '통제실',           en: 'COMMAND HUB',      flavor: '헬기장까지 200미터.' },
+};
+const BIOME_LABEL = {
+  jungle: 'TROPICAL JUNGLE',
+  swamp: 'RIVERINE BASIN',
+  lab: 'RESEARCH WING',
+};
+
+// ============================================================
+//   DINOSAURS
+// ============================================================
+// Base enemy factory
+const DINOS = {
+  compy: { // tiny swarm
+    name: '콤프소그나투스', nameEn: 'Compy',
+    carnivore: true, r: 10, hp: 18, speed: 2.0, dmg: 5,
+    aggro: 360, attackR: 20, attackCd: 700,
+    color: '#8a6d3b', accent: '#3d2b13', dna: 2,
+    draw: drawCompy, flee: false,
+  },
+  raptor: {
+    name: '벨로시랩터', nameEn: 'Raptor',
+    carnivore: true, r: 16, hp: 65, speed: 2.7, dmg: 14,
+    aggro: 520, attackR: 28, attackCd: 650,
+    color: '#6b4226', accent: '#ffa500', dna: 6,
+    draw: drawRaptor,
+  },
+  dilo: {
+    name: '딜로포사우루스', nameEn: 'Dilo',
+    carnivore: true, r: 18, hp: 55, speed: 1.6, dmg: 9,
+    aggro: 580, attackR: 280, attackCd: 1400, ranged: true,
+    color: '#4a5d3a', accent: '#e63946', dna: 8,
+    draw: drawDilo,
+  },
+  carno: {
+    name: '카르노타우루스', nameEn: 'Carno',
+    carnivore: true, r: 22, hp: 120, speed: 2.2, dmg: 22,
+    aggro: 500, attackR: 32, attackCd: 900,
+    charger: { speed: 7.0, duration: 520, windup: 220, triggerRange: 280, cooldown: 1500 },
+    color: '#8b0000', accent: '#2a0505', dna: 12,
+    draw: drawCarno,
+  },
+  // Herbivores — passive until hit, retaliate
+  para: {
+    name: '파라사우롤로푸스', nameEn: 'Para',
+    carnivore: false, r: 18, hp: 90, speed: 1.6, dmg: 12,
+    aggro: 0, attackR: 30, attackCd: 900,
+    color: '#8fbc8f', accent: '#4a6741', dna: 4,
+    draw: drawPara,
+  },
+  trike: {
+    name: '트리케라톱스', nameEn: 'Trike',
+    carnivore: false, r: 24, hp: 180, speed: 1.0, dmg: 24,
+    aggro: 0, attackR: 34, attackCd: 1400,
+    charger: { speed: 4.2, duration: 360, windup: 520, triggerRange: 170, cooldown: 2400 },
+    color: '#7a6a56', accent: '#c9a66b', dna: 10,
+    draw: drawTrike,
+  },
+  stego: {
+    name: '스테고사우루스', nameEn: 'Stego',
+    carnivore: false, r: 26, hp: 240, speed: 1.0, dmg: 18,
+    aggro: 0, attackR: 44, attackCd: 1300,
+    thagomizer: { damage: 14, speed: 5.2, count: 10, cooldown: 3200, windup: 620 },
+    color: '#6b5d4f', accent: '#ffb703', dna: 12,
+    draw: drawStego,
+  },
+  anky: {
+    name: '안킬로사우루스', nameEn: 'Anky',
+    carnivore: false, r: 24, hp: 300, speed: 0.9, dmg: 28,
+    aggro: 0, attackR: 40, attackCd: 1500, armored: true,
+    slam: { damage: 26, range: 150, windup: 720, cooldown: 3200, knockback: 22 },
+    color: '#4a4038', accent: '#8a7a68', dna: 14,
+    draw: drawAnky,
+  },
+  // Bosses
+  trex: {
+    name: 'T-REX', nameEn: 'Tyrannosaurus',
+    carnivore: true, r: 42, hp: 900, speed: 1.7, dmg: 40,
+    aggro: 2000, attackR: 60, attackCd: 1100, boss: true,
+    color: '#3d2817', accent: '#8b0000', dna: 140,
+    draw: drawTRex,
+  },
+  spino: {
+    name: 'SPINOSAURUS', nameEn: 'Spinosaurus',
+    carnivore: true, r: 46, hp: 1400, speed: 1.9, dmg: 38,
+    aggro: 2000, attackR: 70, attackCd: 900, boss: true, ranged: true,
+    color: '#2c4a3e', accent: '#ffb703', dna: 220,
+    draw: drawSpino,
+  },
+  indominus: {
+    name: 'INDOMINUS REX', nameEn: 'Indominus',
+    carnivore: true, r: 50, hp: 2400, speed: 2.1, dmg: 48,
+    aggro: 3000, attackR: 68, attackCd: 800, boss: true, cloaking: true,
+    color: '#d9d2c5', accent: '#8b0000', dna: 400,
+    draw: drawIndominus,
+  },
+};
+
+function makeEnemy(type, x, y) {
+  const t = DINOS[type];
+  return {
+    type, tpl: t,
+    x, y, vx: 0, vy: 0,
+    r: t.r, hp: t.hp, maxHp: t.hp,
+    speed: t.speed, dmg: t.dmg,
+    angle: rand(0, Math.PI*2),
+    wanderT: 0, wanderA: rand(0, Math.PI*2),
+    aggroed: t.carnivore, // carnivores start hostile
+    target: null,
+    attackCd: 0,
+    state: 'idle', // idle, chase, attack, charge, windup, flee
+    chargeT: 0, chargeVx: 0, chargeVy: 0,
+    windupT: 0,            // pre-charge telegraph
+    specialCd: 1800,       // thagomizer-style cooldown
+    specialWindup: 0,      // telegraph for special
+    knockbackT: 0, knockbackVx: 0, knockbackVy: 0,  // recoil from hitting player
+    walkCycle: 0,
+    flash: 0,
+    alpha: 1,
+    cloaked: false, cloakT: 0,
+    phase: 1,
+    deathT: 0, dying: false,
+    stepTimer: 0,          // for footfall dust
+  };
+}
+
+// ============================================================
+//   DINOSAUR RENDERING — procedural top-down silhouettes
+// ============================================================
+function baseBody(e, color, accent, bodyW, bodyH, headW, headH, headOff) {
+  const cx = e.x - state.camera.x;
+  const cy = e.y - state.camera.y;
+
+  // --- World-space soft shadow (not rotated with body) ---
+  ctx.save();
+  ctx.globalAlpha *= 0.45;
+  const sg = ctx.createRadialGradient(cx + 3, cy + 5, 0, cx + 3, cy + 5, bodyW * 1.3);
+  sg.addColorStop(0, 'rgba(0,0,0,0.7)');
+  sg.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = sg;
+  ctx.beginPath();
+  ctx.ellipse(cx + 3, cy + 5, bodyW * 1.25, bodyH * 0.7, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+
+  // --- Rotated body ---
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(e.angle);
+  if (e.flash > 0) ctx.filter = 'brightness(2.2) saturate(0.6)';
+  ctx.globalAlpha *= e.alpha ?? 1;
+
+  const walkLift = Math.sin(e.walkCycle) * 0.8;
+  const wobble = Math.sin(e.walkCycle) * 0.15;
+
+  // tail (drawn first, behind body)
+  const tailGrad = ctx.createLinearGradient(-bodyW*2.1, 0, -bodyW*0.8, 0);
+  tailGrad.addColorStop(0, shade(color, -0.25));
+  tailGrad.addColorStop(1, color);
+  ctx.fillStyle = tailGrad;
+  ctx.beginPath();
+  ctx.moveTo(-bodyW*0.8, -bodyH*0.35);
+  ctx.quadraticCurveTo(-bodyW*1.6, -bodyH*1.0 + wobble*bodyH, -bodyW*2.1, wobble*bodyH*2);
+  ctx.quadraticCurveTo(-bodyW*1.6, bodyH*1.0 + wobble*bodyH, -bodyW*0.8, bodyH*0.35);
+  ctx.fill();
+
+  // legs (under body)
+  const legSwing = Math.sin(e.walkCycle) * 4;
+  ctx.fillStyle = shade(accent, -0.2);
+  // back-left
+  ctx.beginPath(); ctx.ellipse(-bodyW*0.25 - legSwing*0.1, -bodyH*0.9, bodyW*0.18, bodyH*0.28, 0.1, 0, Math.PI*2); ctx.fill();
+  // back-right
+  ctx.beginPath(); ctx.ellipse(-bodyW*0.25 + legSwing*0.1, bodyH*0.9, bodyW*0.18, bodyH*0.28, -0.1, 0, Math.PI*2); ctx.fill();
+  // front-left (brighter)
+  ctx.fillStyle = accent;
+  ctx.beginPath(); ctx.ellipse(bodyW*0.2 + legSwing*0.15, -bodyH*0.85, bodyW*0.17, bodyH*0.26, -0.1, 0, Math.PI*2); ctx.fill();
+  // front-right
+  ctx.beginPath(); ctx.ellipse(bodyW*0.2 - legSwing*0.15, bodyH*0.85, bodyW*0.17, bodyH*0.26, 0.1, 0, Math.PI*2); ctx.fill();
+
+  // body fill — with top-down highlight gradient
+  const bodyGrad = ctx.createRadialGradient(-bodyW*0.2, -bodyH*0.3, 1, 0, 0, bodyW * 1.1);
+  bodyGrad.addColorStop(0, shade(color, 0.18));
+  bodyGrad.addColorStop(0.55, color);
+  bodyGrad.addColorStop(1, shade(color, -0.25));
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath(); ctx.ellipse(0, walkLift*0.3, bodyW, bodyH, 0, 0, Math.PI*2); ctx.fill();
+
+  // subtle rim dark on right
+  ctx.save();
+  ctx.globalAlpha *= 0.35;
+  ctx.fillStyle = '#000';
+  ctx.beginPath(); ctx.ellipse(bodyW*0.4, 0, bodyW*0.5, bodyH*0.8, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // head (with shading)
+  const headGrad = ctx.createRadialGradient(bodyW + headOff - headW*0.3, -headH*0.3, 0, bodyW + headOff, 0, headW * 1.2);
+  headGrad.addColorStop(0, shade(color, 0.22));
+  headGrad.addColorStop(1, shade(color, -0.15));
+  ctx.fillStyle = headGrad;
+  ctx.beginPath(); ctx.ellipse(bodyW + headOff, 0, headW, headH, 0, 0, Math.PI*2); ctx.fill();
+}
+
+// helper — shade a hex color by amt (-1..1)
+function shade(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  if (amt >= 0) { r += (255 - r) * amt; g += (255 - g) * amt; b += (255 - b) * amt; }
+  else { r *= 1 + amt; g *= 1 + amt; b *= 1 + amt; }
+  r = Math.round(clamp(r, 0, 255)); g = Math.round(clamp(g, 0, 255)); b = Math.round(clamp(b, 0, 255));
+  return `rgb(${r},${g},${b})`;
+}
+
+function drawCompy(e) {
+  baseBody(e, e.tpl.color, e.tpl.accent, 8, 6, 5, 4, 4);
+  // tiny teeth
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(8 + 8, -1, 3, 2);
+  // eye
+  ctx.fillStyle = '#ff0';
+  ctx.beginPath(); ctx.arc(8 + 4, -2, 1, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function drawRaptor(e) {
+  const { color, accent } = e.tpl;
+  baseBody(e, color, accent, 14, 9, 9, 7, 6);
+  // stripes
+  ctx.fillStyle = accent;
+  for (let i = -1; i <= 1; i++) {
+    ctx.fillRect(-4 + i*4, -9, 1.5, 18);
+  }
+  // jaw
+  ctx.fillStyle = '#1a0f07';
+  ctx.beginPath(); ctx.ellipse(14 + 6 + 5, 0, 4, 3, 0, 0, Math.PI*2); ctx.fill();
+  // teeth
+  ctx.fillStyle = '#fff';
+  for (let i = 0; i < 3; i++) {
+    ctx.fillRect(14 + 6 + i*2 - 2, -2.5, 1, 1.5);
+    ctx.fillRect(14 + 6 + i*2 - 2, 1, 1, 1.5);
+  }
+  // eye
+  ctx.fillStyle = '#ffcd29';
+  ctx.beginPath(); ctx.arc(14 + 3, -3, 1.5, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function drawDilo(e) {
+  const { color, accent } = e.tpl;
+  baseBody(e, color, accent, 16, 11, 10, 8, 6);
+  // frill
+  ctx.fillStyle = accent;
+  ctx.beginPath();
+  ctx.moveTo(16 + 4, -8);
+  ctx.lineTo(16 + 14, -14);
+  ctx.lineTo(16 + 18, 0);
+  ctx.lineTo(16 + 14, 14);
+  ctx.lineTo(16 + 4, 8);
+  ctx.closePath(); ctx.fill();
+  // crests on head
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(16 + 6, -4, 1.5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(16 + 6, 4, 1.5, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function drawCarno(e) {
+  const { color, accent } = e.tpl;
+  baseBody(e, color, accent, 20, 14, 12, 10, 7);
+  // horns
+  ctx.fillStyle = '#2a0505';
+  ctx.beginPath();
+  ctx.moveTo(20 + 8, -6); ctx.lineTo(20 + 14, -12); ctx.lineTo(20 + 10, -6); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(20 + 8, 6); ctx.lineTo(20 + 14, 12); ctx.lineTo(20 + 10, 6); ctx.fill();
+  // scar stripes
+  ctx.strokeStyle = accent; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(-10, -10); ctx.lineTo(5, -3); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-8, 12); ctx.lineTo(8, 4); ctx.stroke();
+  // eye
+  ctx.fillStyle = '#ff0';
+  ctx.beginPath(); ctx.arc(20 + 4, -3, 1.8, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function drawPara(e) {
+  const { color, accent } = e.tpl;
+  baseBody(e, color, accent, 16, 11, 10, 7, 6);
+  // crest sweeping back
+  ctx.fillStyle = accent;
+  ctx.beginPath();
+  ctx.moveTo(16 + 4, -3);
+  ctx.quadraticCurveTo(16 - 4, -16, 16 - 14, -10);
+  ctx.quadraticCurveTo(16 - 2, -8, 16 + 4, -3);
+  ctx.fill();
+  // belly pattern
+  ctx.fillStyle = '#cde4c0';
+  ctx.beginPath(); ctx.ellipse(0, 0, 10, 5, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function drawTrike(e) {
+  const { color, accent } = e.tpl;
+  baseBody(e, color, accent, 22, 16, 10, 12, 6);
+  // frill
+  ctx.fillStyle = accent;
+  ctx.beginPath();
+  ctx.ellipse(22 + 2, 0, 12, 16, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.ellipse(22 + 6, 0, 10, 12, 0, 0, Math.PI*2); ctx.fill();
+  // 3 horns
+  ctx.fillStyle = '#f4e7c1';
+  // center horn (nose)
+  ctx.beginPath();
+  ctx.moveTo(22 + 14, -2); ctx.lineTo(22 + 22, 0); ctx.lineTo(22 + 14, 2); ctx.fill();
+  // two brow horns
+  ctx.beginPath();
+  ctx.moveTo(22 + 10, -6); ctx.lineTo(22 + 20, -10); ctx.lineTo(22 + 12, -4); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(22 + 10, 6); ctx.lineTo(22 + 20, 10); ctx.lineTo(22 + 12, 4); ctx.fill();
+  // frill pattern
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.ellipse(22 + 2, -6, 3, 4, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(22 + 2, 6, 3, 4, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function drawStego(e) {
+  const { color, accent } = e.tpl;
+  baseBody(e, color, accent, 22, 14, 8, 6, 5);
+  // back plates
+  const winding = e.specialWindup > 0;
+  const glow = winding ? (1 - e.specialWindup / (e.tpl.thagomizer.windup)) : 0;
+  const plateColor = winding ? '#ffcd29' : accent;
+  if (winding) {
+    ctx.shadowColor = '#ffcd29';
+    ctx.shadowBlur = 12 + glow * 18;
+  }
+  ctx.fillStyle = plateColor;
+  for (let i = -2; i <= 2; i++) {
+    const bx = i * 8;
+    const bh = 12 - Math.abs(i) * 2;
+    ctx.beginPath();
+    ctx.moveTo(bx - 3, -6); ctx.lineTo(bx, -6 - bh); ctx.lineTo(bx + 3, -6);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(bx - 3, 6); ctx.lineTo(bx, 6 + bh); ctx.lineTo(bx + 3, 6);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+  // thagomizer (tail spikes)
+  ctx.fillStyle = winding ? '#ffe066' : '#f4e7c1';
+  ctx.save();
+  ctx.translate(-22*2, 0);
+  ctx.beginPath(); ctx.moveTo(0, -3); ctx.lineTo(-10, -10); ctx.lineTo(-2, -1); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(0, 3); ctx.lineTo(-10, 10); ctx.lineTo(-2, 1); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(0, -1); ctx.lineTo(-12, 0); ctx.lineTo(0, 1); ctx.fill();
+  ctx.restore();
+  ctx.restore();
+}
+
+function drawAnky(e) {
+  const { color, accent } = e.tpl;
+  baseBody(e, color, accent, 22, 16, 9, 6, 5);
+  // armor scutes
+  ctx.fillStyle = accent;
+  for (let x = -18; x <= 14; x += 6) {
+    for (let y = -10; y <= 10; y += 8) {
+      ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI*2); ctx.fill();
+    }
+  }
+  // side spikes
+  ctx.fillStyle = '#f4e7c1';
+  for (let i = -2; i <= 2; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i*6 - 2, -15); ctx.lineTo(i*6, -22); ctx.lineTo(i*6 + 2, -15); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(i*6 - 2, 15); ctx.lineTo(i*6, 22); ctx.lineTo(i*6 + 2, 15); ctx.fill();
+  }
+  // tail club — glows during slam windup
+  const winding = e.specialWindup > 0;
+  const glowT = winding ? (1 - e.specialWindup / (e.tpl.slam?.windup || 700)) : 0;
+  const lift = winding ? -8 - glowT * 6 : 0; // club raises as windup progresses
+  if (winding) {
+    ctx.shadowColor = '#ffcd29';
+    ctx.shadowBlur = 18 + glowT * 20;
+  }
+  ctx.fillStyle = winding ? shade('#ffcd29', -0.1 + glowT * 0.3) : accent;
+  ctx.beginPath(); ctx.arc(-22*2 - 4, lift, 8 + glowT * 2, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = winding ? '#fff2b0' : '#f4e7c1';
+  for (let i = 0; i < 6; i++) {
+    const a = i * Math.PI / 3;
+    ctx.beginPath(); ctx.arc(-22*2 - 4 + Math.cos(a)*6, lift + Math.sin(a)*6, 1.8, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+function drawTRex(e) {
+  const { color, accent } = e.tpl;
+  baseBody(e, color, accent, 38, 26, 26, 18, 10);
+  // back stripes
+  ctx.fillStyle = accent;
+  for (let i = -2; i <= 2; i++) {
+    const sx = i * 10;
+    ctx.beginPath(); ctx.ellipse(sx, -16, 4, 8, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(sx, 16, 4, 8, 0, 0, Math.PI*2); ctx.fill();
+  }
+  // massive jaw
+  ctx.fillStyle = '#1a0a05';
+  ctx.beginPath(); ctx.ellipse(38 + 22, 2, 14, 6, 0, 0, Math.PI*2); ctx.fill();
+  // teeth
+  ctx.fillStyle = '#fff';
+  for (let i = 0; i < 6; i++) {
+    ctx.beginPath();
+    ctx.moveTo(38 + 14 + i*3, -3); ctx.lineTo(38 + 14 + i*3 + 1, 2); ctx.lineTo(38 + 14 + i*3 + 2, -3); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(38 + 14 + i*3, 3); ctx.lineTo(38 + 14 + i*3 + 1, -2); ctx.lineTo(38 + 14 + i*3 + 2, 3); ctx.fill();
+  }
+  // eye — glowing yellow
+  ctx.fillStyle = '#ffcd29';
+  ctx.beginPath(); ctx.arc(38 + 8, -8, 3, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#000';
+  ctx.beginPath(); ctx.arc(38 + 9, -8, 1, 0, Math.PI*2); ctx.fill();
+  // tiny arms
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.ellipse(8, -16, 3, 6, 0.3, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(8, 16, 3, 6, -0.3, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function drawSpino(e) {
+  const { color, accent } = e.tpl;
+  baseBody(e, color, accent, 40, 22, 26, 12, 10);
+  // iconic sail (symmetric top/bottom in top-down view — a ridge along the spine)
+  ctx.fillStyle = accent;
+  ctx.beginPath();
+  ctx.moveTo(-22, -6);
+  ctx.quadraticCurveTo(-10, -22, 0, -18);
+  ctx.quadraticCurveTo(10, -14, 18, -6);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(-22, 6);
+  ctx.quadraticCurveTo(-10, 22, 0, 18);
+  ctx.quadraticCurveTo(10, 14, 18, 6);
+  ctx.closePath();
+  ctx.fill();
+  // sail ribs
+  ctx.strokeStyle = '#1a2d24'; ctx.lineWidth = 1;
+  for (let i = 0; i < 4; i++) {
+    const sx = -18 + i * 10;
+    ctx.beginPath(); ctx.moveTo(sx, -16); ctx.lineTo(sx, 16); ctx.stroke();
+  }
+  // long crocodile snout
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.ellipse(40 + 16, 0, 18, 8, 0, 0, Math.PI*2); ctx.fill();
+  // teeth
+  ctx.fillStyle = '#fff';
+  for (let i = 0; i < 8; i++) {
+    ctx.fillRect(40 + 6 + i*4, -6, 1.2, 2);
+    ctx.fillRect(40 + 6 + i*4, 4, 1.2, 2);
+  }
+  // eye
+  ctx.fillStyle = '#ffcd29';
+  ctx.beginPath(); ctx.arc(40 + 4, -6, 2.5, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function drawIndominus(e) {
+  const { color, accent } = e.tpl;
+  // cloaking effect
+  if (e.cloaked) { ctx.save(); ctx.globalAlpha *= 0.25; }
+  baseBody(e, color, accent, 44, 28, 28, 20, 12);
+  // raptor-like stripes
+  ctx.fillStyle = accent;
+  for (let i = -3; i <= 3; i++) {
+    const sx = i * 9;
+    ctx.beginPath();
+    ctx.moveTo(sx - 2, -20); ctx.lineTo(sx + 2, -8); ctx.lineTo(sx - 2, -8); ctx.lineTo(sx - 6, -20); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(sx - 2, 20); ctx.lineTo(sx + 2, 8); ctx.lineTo(sx - 2, 8); ctx.lineTo(sx - 6, 20); ctx.fill();
+  }
+  // bony spikes on back
+  ctx.fillStyle = '#1a0a05';
+  for (let i = -2; i <= 2; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i*10 - 3, -24); ctx.lineTo(i*10, -32); ctx.lineTo(i*10 + 3, -24); ctx.fill();
+  }
+  // massive jaw
+  ctx.fillStyle = '#2a0505';
+  ctx.beginPath(); ctx.ellipse(44 + 24, 0, 14, 8, 0, 0, Math.PI*2); ctx.fill();
+  // teeth (intimidating)
+  ctx.fillStyle = '#fff';
+  for (let i = 0; i < 8; i++) {
+    ctx.beginPath();
+    ctx.moveTo(44 + 14 + i*3, -5); ctx.lineTo(44 + 14 + i*3 + 1.5, 3); ctx.lineTo(44 + 14 + i*3 + 3, -5); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(44 + 14 + i*3, 5); ctx.lineTo(44 + 14 + i*3 + 1.5, -3); ctx.lineTo(44 + 14 + i*3 + 3, 5); ctx.fill();
+  }
+  // glowing red eyes (2)
+  ctx.fillStyle = '#ff0000';
+  ctx.shadowColor = '#ff0000'; ctx.shadowBlur = 10;
+  ctx.beginPath(); ctx.arc(44 + 8, -8, 3, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(44 + 8, 8, 3, 0, Math.PI*2); ctx.fill();
+  ctx.shadowBlur = 0;
+  // claws (raptor arms)
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.ellipse(12, -20, 4, 9, 0.4, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(12, 20, 4, 9, -0.4, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#f4e7c1';
+  ctx.beginPath(); ctx.arc(18, -26, 2, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(18, 26, 2, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+  if (e.cloaked) ctx.restore();
+}
+
+// ============================================================
+//   LEVEL GENERATION
+// ============================================================
+function floorConfig(f) {
+  // returns biome + enemy pool + count + boss
+  const boss = f === 3 ? 'trex' : f === 6 ? 'spino' : f === 10 ? 'indominus' : null;
+  let biome = 'jungle';
+  if (f <= 3) biome = 'jungle';
+  else if (f <= 6) biome = 'swamp';
+  else biome = 'lab';
+  let pool;
+  if (f === 1) pool = ['compy', 'compy', 'para'];
+  else if (f === 2) pool = ['compy', 'para', 'raptor'];
+  else if (f === 3) pool = []; // boss floor
+  else if (f === 4) pool = ['raptor', 'dilo', 'para', 'trike'];
+  else if (f === 5) pool = ['raptor', 'dilo', 'trike', 'stego'];
+  else if (f === 6) pool = []; // boss
+  else if (f === 7) pool = ['raptor', 'dilo', 'trike', 'stego', 'anky'];
+  else if (f === 8) pool = ['carno', 'dilo', 'stego', 'anky'];
+  else if (f === 9) pool = ['raptor', 'carno', 'trike', 'anky'];
+  else if (f === 10) pool = []; // final boss
+  else pool = ['raptor', 'carno'];
+
+  let count = Math.min(4 + f, 10);
+  if (boss) count = 0;
+  return { biome, pool, count, boss };
+}
+
+function generateFloor(f) {
+  state.enemies = [];
+  state.projectiles = [];
+  state.particles = [];
+  state.pickups = [];
+  state.shockwaves = [];
+  state.doorOpen = false;
+  state.bossActive = false;
+  state.bossRef = null;
+  const banner = document.getElementById('exit-banner');
+  if (banner) banner.classList.remove('show');
+  const cfg = floorConfig(f);
+  state.biome = cfg.biome;
+
+  // Generate arena walls / obstacles
+  state.tiles = [];
+  for (let y = 0; y < ARENA_H; y++) {
+    const row = [];
+    for (let x = 0; x < ARENA_W; x++) {
+      if (x === 0 || y === 0 || x === ARENA_W-1 || y === ARENA_H-1) row.push(1);
+      else row.push(0);
+    }
+    state.tiles.push(row);
+  }
+  // obstacles (trees/rocks/containers based on biome)
+  const obstacleCount = irand(6, 12);
+  for (let i = 0; i < obstacleCount; i++) {
+    const x = irand(2, ARENA_W-3);
+    const y = irand(2, ARENA_H-3);
+    // don't block center
+    if (Math.abs(x - ARENA_W/2) < 3 && Math.abs(y - ARENA_H/2) < 3) continue;
+    state.tiles[y][x] = 2; // 2 = obstacle (destructible-ish, blocks movement)
+  }
+
+  // Place player center
+  state.player.x = MAP_W / 2;
+  state.player.y = MAP_H / 2;
+  state.player.vx = 0; state.player.vy = 0;
+
+  // Spawn enemies
+  if (cfg.boss) {
+    const spawnX = MAP_W/2;
+    const spawnY = 120;
+    const boss = makeEnemy(cfg.boss, spawnX, spawnY);
+    state.enemies.push(boss);
+    state.bossActive = true;
+    state.bossRef = boss;
+    // Boss warning is fired during the transition's 'grace' phase
+  } else {
+    for (let i = 0; i < cfg.count; i++) {
+      const type = cfg.pool[irand(0, cfg.pool.length-1)];
+      let ex, ey, ok = false, tries = 0;
+      while (!ok && tries < 40) {
+        ex = rand(80, MAP_W-80);
+        ey = rand(80, MAP_H-80);
+        const tx = Math.floor(ex/TILE), ty = Math.floor(ey/TILE);
+        if (state.tiles[ty] && state.tiles[ty][tx] === 0 && dist(ex, ey, state.player.x, state.player.y) > 220) ok = true;
+        tries++;
+      }
+      if (ok) state.enemies.push(makeEnemy(type, ex, ey));
+    }
+  }
+
+  startTransition(f, cfg.biome, !!cfg.boss);
+  updateHUD();
+}
+
+function showBossWarning(name) {
+  document.getElementById('boss-warning-name').textContent = name;
+  const w = document.getElementById('boss-warning');
+  w.classList.add('show');
+  setTimeout(() => w.classList.remove('show'), 1800);
+  vibrate([60, 40, 60, 40, 120]);
+}
+
+function startTransition(floor, biome, isBoss) {
+  const info = SECTOR_NAMES[floor] || { ko: '미지의 구역', en: 'UNKNOWN', flavor: '...' };
+  state.transition = {
+    phase: 'in',       // in → hold → out → grace
+    t: 0,
+    dIn: 500, dHold: 1500, dOut: 700,
+    dGrace: isBoss ? 2500 : 1500,
+    bossWarningFired: false,
+    floor,
+    title: info.ko,
+    sectorEn: info.en,
+    biomeEn: BIOME_LABEL[biome] || biome,
+    flavor: info.flavor,
+    isBoss,
+  };
+  vibrate(isBoss ? [50, 30, 100] : 20);
+}
+
+// ============================================================
+//   UPDATE
+// ============================================================
+let lastT = performance.now();
+function tick() {
+  const now = performance.now();
+  const dt = Math.min(now - lastT, 33);
+  lastT = now;
+  if (state.scene === 'play') update(dt);
+  draw();
+  requestAnimationFrame(tick);
+}
+
+function update(dt) {
+  const p = state.player;
+
+  // ---- Sector transition ----
+  let enemiesFrozen = false;
+  if (state.transition) {
+    const tr = state.transition;
+    tr.t += dt;
+    if (tr.phase === 'in'    && tr.t >= tr.dIn)    { tr.phase = 'hold';  tr.t = 0; }
+    else if (tr.phase === 'hold'  && tr.t >= tr.dHold)  { tr.phase = 'out';   tr.t = 0; }
+    else if (tr.phase === 'out'   && tr.t >= tr.dOut)   { tr.phase = 'grace'; tr.t = 0; }
+    else if (tr.phase === 'grace' && tr.t >= tr.dGrace) { state.transition = null; }
+
+    p.iframes = Math.max(p.iframes, 100);
+
+    // 'in' / 'hold' — freeze everything except particles + camera
+    if (state.transition && (tr.phase === 'in' || tr.phase === 'hold')) {
+      for (const pt of state.particles) {
+        pt.x += pt.vx * dt / 16;
+        pt.y += pt.vy * dt / 16;
+        pt.vx *= 0.95; pt.vy *= 0.95;
+        pt.life -= dt;
+      }
+      state.particles = state.particles.filter(x => x.life > 0);
+      const tCX = clamp(p.x - W/2, 0, MAP_W - W);
+      const tCY = clamp(p.y - H/2, 0, MAP_H - H);
+      state.camera.x = lerp(state.camera.x, tCX, 0.08);
+      state.camera.y = lerp(state.camera.y, tCY, 0.08);
+      updateHUD();
+      return;
+    }
+    // 'out' / 'grace' — player active, enemies still frozen
+    enemiesFrozen = true;
+  }
+
+  // ----- Player movement -----
+  let mx = 0, my = 0;
+  if (keys['w'] || keys['arrowup']) my -= 1;
+  if (keys['s'] || keys['arrowdown']) my += 1;
+  if (keys['a'] || keys['arrowleft']) mx -= 1;
+  if (keys['d'] || keys['arrowright']) mx += 1;
+  if (touch.move.active) {
+    const d = Math.hypot(touch.move.x, touch.move.y);
+    if (d > 5) { mx = touch.move.x / 60; my = touch.move.y / 60; }
+  }
+  const mlen = Math.hypot(mx, my);
+  if (mlen > 1) { mx /= mlen; my /= mlen; }
+
+  if (p.dodgeActive > 0) {
+    p.x += p.vx * dt / 16;
+    p.y += p.vy * dt / 16;
+    p.vx *= 0.92; p.vy *= 0.92;
+    p.dodgeActive -= dt;
+    // dodge dust trail
+    if (Math.random() < 0.6) {
+      spawnParticle(p.x + rand(-6,6), p.y + rand(-4, 8), rand(-0.5, 0.5), rand(-1, 0.3),
+        state.biome === 'lab' ? '#666' : '#8a6d3b', 400, rand(2, 4));
+    }
+  } else {
+    p.vx = lerp(p.vx, mx * p.speed, 0.25);
+    p.vy = lerp(p.vy, my * p.speed, 0.25);
+    p.x += p.vx * dt / 16;
+    p.y += p.vy * dt / 16;
+  }
+
+  // Footstep dust — deterministic, tied to walk cycle
+  if (mlen > 0.3 && !p.dodgeActive) {
+    p.stepTimer = (p.stepTimer || 0) - dt;
+    if (p.stepTimer <= 0) {
+      p.stepTimer = 260;
+      const col = state.biome === 'lab' ? 'rgba(140,140,150,0.4)' :
+                  state.biome === 'swamp' ? 'rgba(80,70,40,0.5)' :
+                  'rgba(140,115,75,0.5)';
+      for (let i = 0; i < 3; i++) {
+        spawnParticle(p.x + rand(-6, 6), p.y + rand(3, 9),
+          rand(-0.4, 0.4), rand(-0.5, 0.2), col, 450, rand(2, 4));
+      }
+    }
+  }
+  // collide with walls/obstacles
+  p.x = clamp(p.x, TILE + p.r, MAP_W - TILE - p.r);
+  p.y = clamp(p.y, TILE + p.r, MAP_H - TILE - p.r);
+  collideTiles(p);
+
+  if (mlen > 0.1) p.walkCycle += dt * 0.02; else p.walkCycle *= 0.9;
+
+  // ----- Aim -----
+  if (touch.shoot.active && Math.hypot(touch.shoot.x, touch.shoot.y) > 10) {
+    p.angle = Math.atan2(touch.shoot.y, touch.shoot.x);
+  } else if (!isTouch) {
+    const wx = mouse.x + state.camera.x;
+    const wy = mouse.y + state.camera.y;
+    p.angle = Math.atan2(wy - p.y, wx - p.x);
+  }
+
+  // ----- Shooting -----
+  if (p.shootCd > 0) p.shootCd -= dt;
+  if (p.swapCd > 0) p.swapCd -= dt;
+  // per-weapon reload timers
+  for (const wk of Object.keys(p.reloading)) {
+    if (p.reloading[wk] > 0) {
+      p.reloading[wk] -= dt;
+      if (p.reloading[wk] <= 0) {
+        p.ammo[wk] = maxAmmoFor(p, wk);
+        p.reloading[wk] = 0;
+      }
+    }
+  }
+  if (p.dodgeCd > 0) p.dodgeCd -= dt;
+  if (p.iframes > 0) p.iframes -= dt;
+  if (p.flash > 0) p.flash -= dt;
+
+  const shootInput = mouse.down || (touch.shoot.active && Math.hypot(touch.shoot.x, touch.shoot.y) > 30);
+  if (shootInput) shoot();
+  if (p.ammo[p.weapon] <= 0 && p.reloading[p.weapon] <= 0) reload();
+
+  // ----- Camera -----
+  const targetCX = clamp(p.x - W/2, 0, MAP_W - W);
+  const targetCY = clamp(p.y - H/2, 0, MAP_H - H);
+  state.camera.x = lerp(state.camera.x, targetCX, 0.12);
+  state.camera.y = lerp(state.camera.y, targetCY, 0.12);
+  if (state.camera.shake > 0) state.camera.shake -= dt * 0.02;
+
+  // ----- Enemies -----
+  if (!enemiesFrozen) {
+    for (const e of state.enemies) updateEnemy(e, dt);
+  }
+
+  // ----- Projectiles -----
+  for (const pr of state.projectiles) {
+    pr.x += pr.vx * dt / 16;
+    pr.y += pr.vy * dt / 16;
+    pr.life -= dt;
+  }
+  // Collisions
+  for (const pr of state.projectiles) {
+    if (pr.life <= 0) continue;
+    // wall
+    const tx = Math.floor(pr.x / TILE), ty = Math.floor(pr.y / TILE);
+    if (!state.tiles[ty] || state.tiles[ty][tx] !== 0) {
+      pr.life = 0;
+      for (let i = 0; i < 5; i++) spawnParticle(pr.x, pr.y, rand(-3,3), rand(-3,3), '#ffe066', 200, rand(1,3));
+      continue;
+    }
+    if (pr.friendly) {
+      for (const e of state.enemies) {
+        if (e.dying) continue;
+        if (pr.hit.has(e)) continue;
+        if (dist(pr.x, pr.y, e.x, e.y) < e.r + pr.r) {
+          damageEnemy(e, pr.dmg);
+          pr.hit.add(e);
+          for (let i = 0; i < 8; i++) spawnParticle(pr.x, pr.y, rand(-3,3), rand(-3,3), '#d62828', 300, rand(2,4));
+          if (pr.pierce > 0) pr.pierce--;
+          else pr.life = 0;
+          break;
+        }
+      }
+    } else {
+      if (p.iframes <= 0 && dist(pr.x, pr.y, p.x, p.y) < p.r + pr.r) {
+        damagePlayer(pr.dmg, pr.reason || '독침');
+        pr.life = 0;
+        for (let i = 0; i < 8; i++) spawnParticle(pr.x, pr.y, rand(-3,3), rand(-3,3), '#00ff66', 300, rand(2,4));
+      }
+    }
+  }
+  state.projectiles = state.projectiles.filter(x => x.life > 0);
+
+  // ----- Particles -----
+  for (const pt of state.particles) {
+    pt.x += pt.vx * dt / 16;
+    pt.y += pt.vy * dt / 16;
+    pt.vx *= 0.95; pt.vy *= 0.95;
+    pt.life -= dt;
+  }
+  state.particles = state.particles.filter(x => x.life > 0);
+
+  // ----- Ambient atmospheric particles -----
+  state.ambientT = (state.ambientT || 0) - dt;
+  if (state.ambientT <= 0) {
+    state.ambientT = 120;
+    // spawn in visible area plus a bit of buffer
+    const viewL = state.camera.x - 40, viewR = state.camera.x + W + 40;
+    const viewT = state.camera.y - 40, viewB = state.camera.y + H + 40;
+    const x = rand(viewL, viewR), y = rand(viewT, viewB);
+    if (state.biome === 'jungle') {
+      // drifting leaf
+      spawnParticle(x, y, rand(-0.3, 0.3), rand(0.3, 0.9),
+        Math.random() > 0.5 ? 'rgba(90, 160, 90, 0.6)' : 'rgba(140, 180, 70, 0.5)',
+        3500, rand(2, 3.5));
+    } else if (state.biome === 'swamp') {
+      // fog motes / mist
+      spawnParticle(x, y, rand(-0.6, 0.6), rand(-0.3, 0.3),
+        'rgba(140, 170, 160, 0.25)', 4000, rand(4, 7));
+    } else {
+      // dust mote / sparks
+      spawnParticle(x, y, rand(-0.2, 0.2), rand(-0.4, -0.1),
+        'rgba(255, 205, 41, 0.4)', 2500, rand(1.5, 2.5));
+    }
+  }
+
+  // ----- Shockwaves (Anky slam etc) -----
+  state.shockwaves = state.shockwaves || [];
+  for (const sw of state.shockwaves) {
+    sw.life -= dt;
+    sw.r = lerp(sw.r, sw.maxR + 10, 0.18);
+  }
+  state.shockwaves = state.shockwaves.filter(s => s.life > 0);
+
+  // ----- Pickups -----
+  for (const pk of state.pickups) {
+    // initial scatter momentum
+    pk.vx = (pk.vx || 0) * 0.92;
+    pk.vy = (pk.vy || 0) * 0.92;
+    pk.x += pk.vx; pk.y += pk.vy;
+    // keep in arena
+    pk.x = clamp(pk.x, TILE + 8, MAP_W - TILE - 8);
+    pk.y = clamp(pk.y, TILE + 8, MAP_H - TILE - 8);
+
+    const d = dist(pk.x, pk.y, p.x, p.y);
+    if (d < 42) {
+      const pull = 0.14;
+      pk.vx = lerp(pk.vx, (p.x - pk.x) * pull, 0.5);
+      pk.vy = lerp(pk.vy, (p.y - pk.y) * pull, 0.5);
+    }
+    if (d < p.r + 6) {
+      if (pk.type === 'dna') state.dna += pk.amount;
+      pk.collected = true;
+      const col = pk.boss ? '#ffcd29' : '#00ffcc';
+      for (let i = 0; i < (pk.boss ? 12 : 6); i++)
+        spawnParticle(pk.x, pk.y, rand(-2,2), rand(-2,2), col, 400, rand(2,4));
+    }
+    pk.bob += dt * 0.005;
+  }
+  state.pickups = state.pickups.filter(x => !x.collected);
+
+  // ----- Clean dying enemies -----
+  for (const e of state.enemies) {
+    if (e.dying) {
+      e.deathT -= dt;
+      e.alpha = e.deathT / 500;
+      if (e.deathT <= 0) {
+        if (e.tpl.boss) {
+          // shower of DNA orbs in radial pattern
+          const orbs = 12 + Math.floor(e.tpl.dna / 25);
+          const perOrb = Math.max(8, Math.ceil(e.tpl.dna / orbs));
+          for (let i = 0; i < orbs; i++) {
+            const a = (i / orbs) * Math.PI * 2 + rand(-0.2, 0.2);
+            const sp = rand(2.5, 6.5);
+            state.pickups.push({
+              x: e.x + Math.cos(a) * 20,
+              y: e.y + Math.sin(a) * 20,
+              vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+              type: 'dna', amount: perOrb,
+              bob: rand(0, Math.PI * 2), boss: true,
+            });
+          }
+          // extra celebratory particles
+          for (let i = 0; i < 40; i++) {
+            const a = rand(0, Math.PI*2);
+            spawnParticle(e.x, e.y, Math.cos(a)*rand(3,8), Math.sin(a)*rand(3,8),
+              i%3===0 ? '#ffcd29' : (i%3===1 ? '#00ffcc' : '#ff8500'),
+              rand(500, 900), rand(3, 6));
+          }
+          state.camera.shake = Math.max(state.camera.shake, 18);
+        } else {
+          state.pickups.push({
+            x: e.x, y: e.y, vx: 0, vy: 0,
+            type: 'dna', amount: e.tpl.dna, bob: 0,
+          });
+        }
+        state.kills++;
+      }
+    }
+  }
+  state.enemies = state.enemies.filter(e => !(e.dying && e.deathT <= 0));
+
+  updateHUD();
+
+  // ----- Floor complete? -----
+  const alive = state.enemies.filter(e => !e.dying).length;
+  if (alive === 0 && !state.doorOpen) {
+    state.doorOpen = true;
+    const banner = document.getElementById('exit-banner');
+    if (banner) banner.classList.add('show');
+    vibrate([40, 30, 60]);
+  }
+  // step into door
+  if (state.doorOpen && dist(p.x, p.y, MAP_W/2, MAP_H - TILE - 20) < 40) {
+    const banner = document.getElementById('exit-banner');
+    if (banner) banner.classList.remove('show');
+    onFloorComplete();
+  }
+}
+
+function collideTiles(obj) {
+  // check 4 corners against obstacles
+  const checks = [
+    [obj.x - obj.r, obj.y], [obj.x + obj.r, obj.y],
+    [obj.x, obj.y - obj.r], [obj.x, obj.y + obj.r],
+  ];
+  for (const [cx, cy] of checks) {
+    const tx = Math.floor(cx / TILE), ty = Math.floor(cy / TILE);
+    if (state.tiles[ty] && state.tiles[ty][tx] > 0) {
+      // push out toward center of tile
+      const centerX = tx * TILE + TILE/2;
+      const centerY = ty * TILE + TILE/2;
+      const dx = obj.x - centerX, dy = obj.y - centerY;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        obj.x = centerX + Math.sign(dx) * (TILE/2 + obj.r + 1);
+      } else {
+        obj.y = centerY + Math.sign(dy) * (TILE/2 + obj.r + 1);
+      }
+    }
+  }
+}
+
+function updateEnemy(e, dt) {
+  if (e.dying) return;
+  const p = state.player;
+  const t = e.tpl;
+  const d = dist(e.x, e.y, p.x, p.y);
+
+  if (e.flash > 0) e.flash -= dt;
+  if (e.attackCd > 0) e.attackCd -= dt;
+
+  // Knockback (from hitting the player) — skip normal AI this frame
+  if (e.knockbackT > 0) {
+    e.x += e.knockbackVx * dt / 16;
+    e.y += e.knockbackVy * dt / 16;
+    e.knockbackVx *= 0.86; e.knockbackVy *= 0.86;
+    e.knockbackT -= dt;
+    e.x = clamp(e.x, TILE + e.r, MAP_W - TILE - e.r);
+    e.y = clamp(e.y, TILE + e.r, MAP_H - TILE - e.r);
+    collideTiles(e);
+    return;
+  }
+
+  // AI
+  let mvx = 0, mvy = 0;
+  let speedMul = 1;
+
+  // Aggro check for carnivores (or already aggroed herbivores)
+  if (t.carnivore && d < t.aggro) e.aggroed = true;
+
+  // Boss: Indominus cloak behavior
+  if (t.cloaking) {
+    e.cloakT -= dt;
+    if (e.cloakT <= 0) {
+      e.cloaked = !e.cloaked;
+      e.cloakT = e.cloaked ? 2200 : 4000;
+    }
+  }
+
+  if (e.state === 'charge') {
+    // straight-line charge
+    e.x += e.chargeVx * dt / 16;
+    e.y += e.chargeVy * dt / 16;
+    e.chargeT -= dt;
+    // dust trail
+    if (Math.random() < 0.4) {
+      spawnParticle(e.x - Math.cos(e.angle)*e.r, e.y - Math.sin(e.angle)*e.r,
+        rand(-1,1), rand(-1,1), '#8a6d3b', 400, rand(2,4));
+    }
+    // damage on contact
+    if (p.iframes <= 0 && d < p.r + e.r) {
+      damagePlayer(e.dmg * 1.2, t.name);
+      e.chargeT = 0;
+      e.chargeVx *= -0.5; e.chargeVy *= -0.5;
+      state.camera.shake = Math.max(state.camera.shake, 10);
+      // always knock back chargers — bosses get lighter push
+      const mul = t.boss ? 0.9 : 1.8;
+      const dur = t.boss ? 200 : 260;
+      e.knockbackT = dur;
+      e.knockbackVx = e.chargeVx * mul;
+      e.knockbackVy = e.chargeVy * mul;
+      e.chargeT = 0;
+      e.state = 'chase';
+    }
+    // wall bounce
+    const tx = Math.floor(e.x/TILE), ty = Math.floor(e.y/TILE);
+    if (!state.tiles[ty] || state.tiles[ty][tx] > 0) {
+      e.chargeT = 0;
+      state.camera.shake = Math.max(state.camera.shake, 8);
+      for (let i = 0; i < 15; i++) spawnParticle(e.x, e.y, rand(-4,4), rand(-4,4), '#8a6d3b', 500, rand(3,5));
+    }
+    if (e.chargeT <= 0) { e.state = 'chase'; }
+    e.walkCycle += dt * 0.03;
+    return;
+  }
+
+  // Charge windup — stands still, telegraph
+  if (e.windupT > 0) {
+    e.windupT -= dt;
+    // face player during windup
+    e.angle = angleTo(e.x, e.y, p.x, p.y);
+    // kicked-up dust
+    if (Math.random() < 0.3) {
+      spawnParticle(e.x + rand(-e.r, e.r), e.y + e.r*0.7, rand(-0.5,0.5), rand(-1.5,-0.3), '#c9a66b', 500, rand(2,4));
+    }
+    if (e.windupT <= 0) {
+      // launch charge
+      const cp = e.chargeParams;
+      e.state = 'charge';
+      e.chargeT = cp.duration;
+      e.chargeVx = Math.cos(e.angle) * cp.speed;
+      e.chargeVy = Math.sin(e.angle) * cp.speed;
+    }
+    e.walkCycle = 0;
+    return;
+  }
+
+  if (e.aggroed) {
+    // Ranged?
+    if (t.ranged && d < t.attackR && d > 100 && e.attackCd <= 0) {
+      // shoot projectile
+      const a = angleTo(e.x, e.y, p.x, p.y);
+      const speed = t.boss ? 7 : 5;
+      state.projectiles.push({
+        x: e.x + Math.cos(a) * e.r,
+        y: e.y + Math.sin(a) * e.r,
+        vx: Math.cos(a) * speed,
+        vy: Math.sin(a) * speed,
+        dmg: e.dmg,
+        life: 2000, pierce: 0, hit: new Set(),
+        friendly: false, r: 6,
+        reason: t.name === '딜로포사우루스' ? '독액' : '물 분사',
+        color: t.name === '딜로포사우루스' ? '#00ff66' : '#3fa9f5',
+      });
+      e.attackCd = t.attackCd;
+    }
+
+    // Stego special: thagomizer spike burst (360° radial)
+    if (t.thagomizer) {
+      const th = t.thagomizer;
+      e.specialCd -= dt;
+      if (e.specialCd <= 0 && e.specialWindup <= 0) {
+        e.specialWindup = th.windup;
+      }
+      if (e.specialWindup > 0) {
+        e.specialWindup -= dt;
+        if (e.specialWindup <= 0) {
+          // BURST
+          for (let i = 0; i < th.count; i++) {
+            const a = (i / th.count) * Math.PI * 2;
+            state.projectiles.push({
+              x: e.x, y: e.y,
+              vx: Math.cos(a) * th.speed,
+              vy: Math.sin(a) * th.speed,
+              dmg: th.damage,
+              life: 950, pierce: 0, hit: new Set(),
+              friendly: false, r: 4,
+              reason: '가시꼬리', color: '#f4e7c1', spike: true, angle: a,
+            });
+          }
+          state.camera.shake = Math.max(state.camera.shake, 7);
+          for (let i = 0; i < 24; i++) spawnParticle(e.x, e.y,
+            Math.cos(i/24*Math.PI*2)*3, Math.sin(i/24*Math.PI*2)*3, '#ffcd29', 400, rand(2,4));
+          e.specialCd = th.cooldown;
+        }
+      }
+    }
+
+    // Anky special: Ground Slam — expanding shockwave, damages + knocks back
+    if (t.slam) {
+      const sl = t.slam;
+      e.specialCd -= dt;
+      // Only wind up if player is close enough
+      if (e.specialCd <= 0 && e.specialWindup <= 0 && d < sl.range + 90) {
+        e.specialWindup = sl.windup;
+      }
+      if (e.specialWindup > 0) {
+        e.specialWindup -= dt;
+        // rearing-up dust during windup
+        if (Math.random() < 0.35) {
+          spawnParticle(e.x - e.r, e.y + rand(-e.r, e.r), rand(-0.6, 0.6), rand(-1.5, -0.3),
+            '#8a6d3b', 450, rand(2,4));
+        }
+        if (e.specialWindup <= 0) {
+          // SLAM
+          if (d < sl.range && p.iframes <= 0) {
+            damagePlayer(sl.damage, t.name);
+            const ang = angleTo(e.x, e.y, p.x, p.y);
+            p.vx += Math.cos(ang) * sl.knockback;
+            p.vy += Math.sin(ang) * sl.knockback;
+          }
+          state.shockwaves = state.shockwaves || [];
+          state.shockwaves.push({ x: e.x, y: e.y, r: 10, maxR: sl.range, life: 550, maxLife: 550 });
+          state.camera.shake = Math.max(state.camera.shake, 16);
+          // ground-burst debris ring
+          for (let i = 0; i < 32; i++) {
+            const ang = (i / 32) * Math.PI * 2;
+            spawnParticle(e.x + Math.cos(ang) * e.r, e.y + Math.sin(ang) * e.r,
+              Math.cos(ang) * rand(4, 8), Math.sin(ang) * rand(4, 8),
+              i % 2 ? '#8a6d3b' : '#c9a66b', 700, rand(3, 6));
+          }
+          e.specialCd = sl.cooldown;
+          vibrate([30, 20, 60]);
+        }
+      }
+    }
+
+    // Charger behavior (with windup telegraph)
+    if (t.charger && typeof t.charger === 'object' && e.attackCd <= 0) {
+      const cp = t.charger;
+      if (d < cp.triggerRange && d > 60) {
+        e.windupT = cp.windup;
+        e.chargeParams = cp;
+        e.attackCd = cp.cooldown;
+        // tell-sign particles
+        for (let i = 0; i < 10; i++) spawnParticle(e.x, e.y, rand(-2,2), rand(-2,2), '#ffcd29', 500, rand(2,4));
+        return;
+      }
+    }
+
+    // Chase
+    const a = angleTo(e.x, e.y, p.x, p.y);
+    mvx = Math.cos(a); mvy = Math.sin(a);
+    e.angle = a;
+    // Boss scaling
+    if (t.boss) speedMul = 1 + (1 - e.hp/e.maxHp) * 0.5;
+
+    // Melee
+    if (d < p.r + e.r + t.attackR*0.3 && e.attackCd <= 0) {
+      if (p.iframes <= 0) {
+        damagePlayer(e.dmg, t.name);
+        state.camera.shake = Math.max(state.camera.shake, 6);
+        // Knock the dinosaur back so it doesn't grind on the player.
+        // Bosses get a lighter push (heavy / cinematic weight) but still separate.
+        const mag = t.boss ? 4 : 7;
+        const dur = t.boss ? 180 : 220;
+        e.knockbackT = dur;
+        e.knockbackVx = -mvx * mag;
+        e.knockbackVy = -mvy * mag;
+      }
+      e.attackCd = t.attackCd;
+      // knockback (player pushed back)
+      p.vx += mvx * 8; p.vy += mvy * 8;
+    }
+  } else {
+    // Wander
+    e.wanderT -= dt;
+    if (e.wanderT <= 0) {
+      e.wanderA = rand(0, Math.PI*2);
+      e.wanderT = rand(1500, 4000);
+    }
+    mvx = Math.cos(e.wanderA) * 0.3;
+    mvy = Math.sin(e.wanderA) * 0.3;
+    if (mvx !== 0 || mvy !== 0) e.angle = Math.atan2(mvy, mvx);
+  }
+
+  // Separation between enemies
+  let sepX = 0, sepY = 0;
+  for (const o of state.enemies) {
+    if (o === e || o.dying) continue;
+    const od = dist(e.x, e.y, o.x, o.y);
+    if (od < e.r + o.r + 4 && od > 0.01) {
+      sepX += (e.x - o.x) / od;
+      sepY += (e.y - o.y) / od;
+    }
+  }
+  mvx += sepX * 0.3; mvy += sepY * 0.3;
+
+  const ml = Math.hypot(mvx, mvy);
+  if (ml > 0.01) { mvx /= ml; mvy /= ml; }
+  e.x += mvx * t.speed * speedMul * dt / 16;
+  e.y += mvy * t.speed * speedMul * dt / 16;
+  e.x = clamp(e.x, TILE + e.r, MAP_W - TILE - e.r);
+  e.y = clamp(e.y, TILE + e.r, MAP_H - TILE - e.r);
+  collideTiles(e);
+  if (ml > 0.01) e.walkCycle += dt * (0.012 + t.speed * 0.008);
+}
+
+function damageEnemy(e, dmg) {
+  const t = e.tpl;
+  // Armor reduction
+  if (t.armored) dmg *= 0.5;
+  e.hp -= dmg;
+  e.flash = 80;
+  // Herbivore retaliation
+  if (!t.carnivore && !e.aggroed) {
+    e.aggroed = true;
+    // visual alert
+    for (let i = 0; i < 8; i++) spawnParticle(e.x, e.y - e.r, rand(-2,2), rand(-3,-1), '#ff0000', 500, rand(2,4));
+  }
+  if (e.hp <= 0 && !e.dying) {
+    e.dying = true; e.deathT = 500;
+    for (let i = 0; i < 20; i++) spawnParticle(e.x, e.y, rand(-4,4), rand(-4,4), i%2 ? '#d62828' : '#8b0000', rand(400,700), rand(3,6));
+    if (t.boss) {
+      state.camera.shake = Math.max(state.camera.shake, 20);
+      state.bossActive = false;
+      vibrate([80, 40, 80, 40, 160]);
+    } else {
+      vibrate(15);
+    }
+  }
+}
+
+function damagePlayer(dmg, reason) {
+  const p = state.player;
+  if (p.iframes > 0) return;
+  p.hp -= dmg;
+  p.iframes = 500;
+  p.flash = 80;
+  state.deathReason = reason || '공룡';
+  state.camera.shake = Math.max(state.camera.shake, 8);
+  vibrate([20, 30, 40]);
+  if (p.hp <= 0) {
+    p.hp = 0;
+    onDeath();
+  }
+}
+
+function spawnParticle(x, y, vx, vy, color, life, size) {
+  state.particles.push({ x, y, vx, vy, color, life, maxLife: life, size });
+}
+
+// ============================================================
+//   FLOW CONTROL
+// ============================================================
+function onFloorComplete() {
+  if (state.floor >= 10) { onWin(); return; }
+  state.scene = 'upgrade';
+  showUpgradeScreen();
+}
+
+function onDeath() {
+  state.scene = 'dead';
+  document.getElementById('dead-floor').textContent = state.floor;
+  document.getElementById('dead-dna').textContent = state.dna;
+  document.getElementById('death-reason').textContent =
+    `${state.deathReason || '공룡'}에게 당했다. 섬은 침묵했다.`;
+  document.getElementById('screen-dead').classList.remove('hidden');
+  vibrate([100, 50, 200]);
+}
+
+function onWin() {
+  state.scene = 'win';
+  document.getElementById('win-dna').textContent = state.dna;
+  document.getElementById('win-kills').textContent = state.kills;
+  document.getElementById('screen-win').classList.remove('hidden');
+}
+
+function showUpgradeScreen() {
+  const p = state.player;
+  document.getElementById('up-hp').textContent = p.maxHp;
+  document.getElementById('up-dmg').textContent = 'x' + p.damageMul.toFixed(2);
+  document.getElementById('up-rate').textContent = 'x' + p.fireRateMul.toFixed(2);
+  document.getElementById('up-mag').textContent = 'x' + p.ammoMul.toFixed(2);
+
+  const choices = rollUpgrades();
+  const grid = document.getElementById('upgrade-choices');
+  grid.innerHTML = '';
+  for (const u of choices) {
+    const el = document.createElement('div');
+    el.className = 'upcard';
+    el.innerHTML = `<div class="icon">${u.icon}</div><div><div class="name">${u.name}</div><div class="desc">${u.desc}</div></div>`;
+    el.onclick = () => { u.apply(state.player); closeUpgrade(); };
+    grid.appendChild(el);
+  }
+
+  renderShop();
+  document.getElementById('screen-upgrade').classList.remove('hidden');
+}
+
+function shopDescFor(wk) {
+  if (wk === 'sniper') return '초고데미지 · 기본 관통 3 · 초고속 탄속';
+  if (wk === 'flame') return '근거리 다단히트 · 넓은 확산 · 대량 탄약';
+  return '';
+}
+
+function renderShop() {
+  const p = state.player;
+  document.getElementById('shop-dna').textContent = state.dna + ' DNA 보유';
+  const shop = document.getElementById('shop-items');
+  shop.innerHTML = '';
+  let anyItems = false;
+  for (const wk of Object.keys(WEAPONS)) {
+    const w = WEAPONS[wk];
+    if (!w.cost) continue;
+    if (p.unlocked[wk]) continue;
+    anyItems = true;
+    const broke = state.dna < w.cost;
+    const el = document.createElement('div');
+    el.className = 'shop-card' + (broke ? ' broke' : '');
+    el.setAttribute('data-w', wk);
+    el.innerHTML = `
+      <div class="s-icon">${w.icon}</div>
+      <div class="s-info">
+        <div class="s-name">${w.name}</div>
+        <div class="s-desc">${shopDescFor(wk)}</div>
+      </div>
+      <div class="s-price">${w.cost} DNA</div>
+    `;
+    el.onclick = () => buyWeapon(wk);
+    shop.appendChild(el);
+  }
+  document.getElementById('shop-section').style.display = anyItems ? 'block' : 'none';
+}
+
+function closeUpgrade() {
+  document.getElementById('screen-upgrade').classList.add('hidden');
+  state.floor++;
+  generateFloor(state.floor);
+  state.scene = 'play';
+  // heal a bit
+  state.player.hp = Math.min(state.player.maxHp, state.player.hp + 20);
+}
+
+function rollUpgrades() {
+  const all = [
+    { icon:'❤', name:'생체강화 키트', desc:'최대 HP +25 · 즉시 완전회복',
+      apply: p => { p.maxHp += 25; p.hp = p.maxHp; }},
+    { icon:'⚡', name:'고압 탄환', desc:'모든 무기 데미지 +25%',
+      apply: p => { p.damageMul *= 1.25; }},
+    { icon:'◎', name:'튜닝된 격발기', desc:'모든 무기 연사속도 +20%',
+      apply: p => { p.fireRateMul *= 1.2; }},
+    { icon:'≡', name:'확장 탄창', desc:'모든 무기 최대 탄약 +35%',
+      apply: p => {
+        p.ammoMul *= 1.35;
+        for (const k of Object.keys(p.ammo)) p.ammo[k] = maxAmmoFor(p, k);
+      }},
+    { icon:'»', name:'관통 탄두', desc:'모든 탄환이 적 1마리 더 관통',
+      apply: p => { p.bulletPierce += 1; }},
+    { icon:'✦', name:'부스터 부츠', desc:'이동속도 +15%',
+      apply: p => { p.speed *= 1.15; }},
+    { icon:'◈', name:'탄속 강화', desc:'탄속 +25%',
+      apply: p => { p.bulletSpeedMul *= 1.25; }},
+    { icon:'⟲', name:'퀵로더', desc:'재장전 시간 -30%',
+      apply: p => { p.reloadMul *= 0.7; }},
+  ];
+  return all.sort(() => Math.random() - 0.5).slice(0, 3);
+}
+
+// ============================================================
+//   RENDERING
+// ============================================================
+function draw() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+  if (state.scene === 'title' || !state.player) {
+    drawTitleBackdrop();
+    return;
+  }
+
+  ctx.save();
+  // Screen shake
+  if (state.camera.shake > 0) {
+    ctx.translate(rand(-state.camera.shake, state.camera.shake), rand(-state.camera.shake, state.camera.shake));
+  }
+
+  drawFloor();
+  drawPickups();
+
+  // Sort enemies by Y for depth
+  const drawables = [...state.enemies, state.player].sort((a,b) => (a.y||0) - (b.y||0));
+  for (const d of drawables) {
+    if (d === state.player) drawPlayer();
+    else drawEnemy(d);
+  }
+
+  drawProjectiles();
+  drawShockwaves();
+  drawParticles();
+  drawDoor();
+
+  ctx.restore();
+
+  // Sector transition overlay (drawn in screen space, above world)
+  if (state.transition) drawTransition();
+}
+
+function drawFloor() {
+  // biome-specific ground
+  const biome = state.biome || 'jungle';
+  let baseA, baseB, tintCol;
+  if (biome === 'jungle')      { baseA = '#1d3a28'; baseB = '#15291b'; tintCol = '#2a5a3a'; }
+  else if (biome === 'swamp')  { baseA = '#2d2e1c'; baseB = '#1a1e12'; tintCol = '#4a4a2a'; }
+  else                         { baseA = '#1a1d28'; baseB = '#10121a'; tintCol = '#2a3048'; }
+
+  // tiled ground
+  const startX = Math.max(0, Math.floor(state.camera.x / TILE));
+  const startY = Math.max(0, Math.floor(state.camera.y / TILE));
+  const endX = Math.min(ARENA_W, Math.ceil((state.camera.x + W) / TILE) + 1);
+  const endY = Math.min(ARENA_H, Math.ceil((state.camera.y + H) / TILE) + 1);
+  for (let y = startY; y < endY; y++) {
+    for (let x = startX; x < endX; x++) {
+      const sx = x * TILE - state.camera.x;
+      const sy = y * TILE - state.camera.y;
+      const t = state.tiles[y][x];
+      if (t === 0) {
+        // base with checker variation
+        ctx.fillStyle = ((x+y) % 2 === 0) ? baseA : baseB;
+        ctx.fillRect(sx, sy, TILE, TILE);
+        drawGroundDetail(sx, sy, x, y, biome, tintCol);
+      } else if (t === 1) {
+        drawWall(sx, sy, biome);
+      } else if (t === 2) {
+        ctx.fillStyle = baseA;
+        ctx.fillRect(sx, sy, TILE, TILE);
+        drawGroundDetail(sx, sy, x, y, biome, tintCol);
+        drawObstacle(sx + TILE/2, sy + TILE/2, biome, x*7 + y*13);
+      }
+    }
+  }
+}
+
+// deterministic hash — stable per-tile detail without flicker
+function hash01(x, y, salt) {
+  let h = (x * 374761393 + y * 668265263 + salt * 2147483647) | 0;
+  h = (h ^ (h >>> 13)) * 1274126177;
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+function drawGroundDetail(sx, sy, tx, ty, biome, tintCol) {
+  if (biome === 'jungle') {
+    // grass tufts
+    const n = 2 + Math.floor(hash01(tx, ty, 1) * 3);
+    for (let i = 0; i < n; i++) {
+      const gx = sx + hash01(tx, ty, i+2) * TILE;
+      const gy = sy + hash01(tx, ty, i+8) * TILE;
+      const tone = hash01(tx, ty, i+12);
+      ctx.fillStyle = tone > 0.5 ? '#2d5a3a' : '#1d3d26';
+      for (let j = 0; j < 3; j++) {
+        const bx = gx + (j-1) * 1.5;
+        ctx.fillRect(bx, gy - 2 - j*0.4, 1, 3 + j*0.5);
+      }
+    }
+    // scattered leaves
+    if (hash01(tx, ty, 99) > 0.7) {
+      const lx = sx + hash01(tx, ty, 100) * TILE;
+      const ly = sy + hash01(tx, ty, 101) * TILE;
+      ctx.fillStyle = '#3a5a2a';
+      ctx.beginPath(); ctx.ellipse(lx, ly, 3, 1.5, hash01(tx, ty, 102) * Math.PI, 0, Math.PI*2); ctx.fill();
+    }
+  } else if (biome === 'swamp') {
+    // mud splotches
+    if (hash01(tx, ty, 3) > 0.5) {
+      const mx = sx + hash01(tx, ty, 4) * TILE;
+      const my = sy + hash01(tx, ty, 5) * TILE;
+      ctx.fillStyle = 'rgba(30, 20, 10, 0.5)';
+      ctx.beginPath(); ctx.ellipse(mx, my, 8 + hash01(tx, ty, 6) * 5, 4, 0, 0, Math.PI*2); ctx.fill();
+    }
+    // water ripples
+    if (hash01(tx, ty, 7) > 0.82) {
+      const rx = sx + hash01(tx, ty, 8) * TILE;
+      const ry = sy + hash01(tx, ty, 9) * TILE;
+      const t = Date.now() * 0.001 + hash01(tx, ty, 10) * 6;
+      ctx.strokeStyle = 'rgba(80, 120, 120, 0.35)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(rx, ry, 3 + (t % 1) * 6, 0, Math.PI*2); ctx.stroke();
+    }
+    // reeds
+    if (hash01(tx, ty, 11) > 0.75) {
+      const rx = sx + hash01(tx, ty, 12) * TILE;
+      const ry = sy + hash01(tx, ty, 13) * TILE;
+      ctx.strokeStyle = '#5a5a2a'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(rx, ry); ctx.lineTo(rx + 1, ry - 6); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(rx+2, ry); ctx.lineTo(rx + 3, ry - 4); ctx.stroke();
+    }
+  } else {
+    // lab — grid tiles
+    ctx.strokeStyle = 'rgba(255, 183, 3, 0.08)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sx + 0.5, sy + 0.5, TILE - 1, TILE - 1);
+    // hazard arrows or markings
+    if (hash01(tx, ty, 20) > 0.85) {
+      ctx.fillStyle = 'rgba(214, 40, 40, 0.2)';
+      const ax = sx + TILE/2, ay = sy + TILE/2;
+      ctx.beginPath(); ctx.moveTo(ax - 8, ay + 3); ctx.lineTo(ax, ay - 5); ctx.lineTo(ax + 8, ay + 3); ctx.closePath(); ctx.fill();
+    }
+    // subtle panel seam
+    if ((tx + ty) % 3 === 0) {
+      ctx.fillStyle = 'rgba(255, 183, 3, 0.04)';
+      ctx.fillRect(sx + 4, sy + 4, TILE - 8, 1);
+    }
+  }
+}
+
+function drawWall(sx, sy, biome) {
+  if (biome === 'lab') {
+    // metal wall
+    ctx.fillStyle = '#2a2a35';
+    ctx.fillRect(sx, sy, TILE, TILE);
+    ctx.strokeStyle = '#ffb703'; ctx.lineWidth = 1;
+    ctx.strokeRect(sx + 2, sy + 2, TILE - 4, TILE - 4);
+    // rivets
+    ctx.fillStyle = '#ffb703';
+    ctx.fillRect(sx+6, sy+6, 2, 2);
+    ctx.fillRect(sx+TILE-8, sy+6, 2, 2);
+    ctx.fillRect(sx+6, sy+TILE-8, 2, 2);
+    ctx.fillRect(sx+TILE-8, sy+TILE-8, 2, 2);
+  } else {
+    // jungle/swamp fence/foliage
+    ctx.fillStyle = '#0a1a10';
+    ctx.fillRect(sx, sy, TILE, TILE);
+    // fence posts
+    ctx.strokeStyle = '#6b4226'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(sx+TILE/4, sy); ctx.lineTo(sx+TILE/4, sy+TILE); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(sx+3*TILE/4, sy); ctx.lineTo(sx+3*TILE/4, sy+TILE); ctx.stroke();
+    // electric wires
+    ctx.strokeStyle = '#ffb703'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(sx, sy+TILE/3); ctx.lineTo(sx+TILE, sy+TILE/3); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(sx, sy+2*TILE/3); ctx.lineTo(sx+TILE, sy+2*TILE/3); ctx.stroke();
+  }
+}
+
+function drawObstacle(cx, cy, biome, seed) {
+  if (biome === 'jungle') {
+    // world-space shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.beginPath(); ctx.ellipse(cx + 5, cy + 8, 22, 10, 0, 0, Math.PI*2); ctx.fill();
+    // canopy — layered
+    ctx.fillStyle = '#0a2818';
+    ctx.beginPath(); ctx.arc(cx, cy, 22, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#15402a';
+    ctx.beginPath(); ctx.arc(cx - 2, cy - 2, 18, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#1e5638';
+    ctx.beginPath(); ctx.arc(cx - 5, cy - 5, 12, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#2a6a42';
+    ctx.beginPath(); ctx.arc(cx + 3, cy + 1, 9, 0, Math.PI*2); ctx.fill();
+    // highlight
+    ctx.fillStyle = 'rgba(255, 255, 180, 0.15)';
+    ctx.beginPath(); ctx.arc(cx - 8, cy - 8, 5, 0, Math.PI*2); ctx.fill();
+    // a few dangling vines
+    ctx.strokeStyle = '#1e4028'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cx + 12, cy + 4); ctx.quadraticCurveTo(cx + 14, cy + 10, cx + 11, cy + 18); ctx.stroke();
+  } else if (biome === 'swamp') {
+    // rotted stump / roots
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.beginPath(); ctx.ellipse(cx + 4, cy + 8, 20, 9, 0, 0, Math.PI*2); ctx.fill();
+    // base
+    ctx.fillStyle = '#3a2d1c';
+    ctx.beginPath(); ctx.ellipse(cx, cy + 6, 18, 10, 0, 0, Math.PI*2); ctx.fill();
+    // stump top
+    ctx.fillStyle = '#5a4628';
+    ctx.beginPath(); ctx.ellipse(cx, cy, 16, 11, 0, 0, Math.PI*2); ctx.fill();
+    // rings
+    ctx.strokeStyle = '#2a1e10'; ctx.lineWidth = 1;
+    for (let r = 4; r < 14; r += 3) {
+      ctx.beginPath(); ctx.ellipse(cx, cy, r, r*0.7, 0, 0, Math.PI*2); ctx.stroke();
+    }
+    // moss on top
+    ctx.fillStyle = '#4a6b2a';
+    ctx.beginPath(); ctx.ellipse(cx - 4, cy - 3, 6, 3, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#6a8a3a';
+    ctx.beginPath(); ctx.ellipse(cx - 3, cy - 4, 3, 1.5, 0, 0, Math.PI*2); ctx.fill();
+    // root poking
+    ctx.strokeStyle = '#2a1e10'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(cx - 14, cy + 4); ctx.quadraticCurveTo(cx - 18, cy + 10, cx - 22, cy + 8); ctx.stroke();
+  } else {
+    // lab crate / console
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(cx - 14, cy + 8, 32, 8);
+    // base crate
+    ctx.fillStyle = '#2a2a35';
+    ctx.fillRect(cx - 16, cy - 14, 32, 28);
+    // panel
+    ctx.fillStyle = '#1a1a22';
+    ctx.fillRect(cx - 13, cy - 11, 26, 22);
+    // amber stripe
+    ctx.fillStyle = '#ffb703';
+    ctx.fillRect(cx - 16, cy - 16, 32, 3);
+    ctx.fillStyle = '#ff8500';
+    ctx.fillRect(cx - 16, cy + 11, 32, 3);
+    // LED panel
+    ctx.fillStyle = '#d62828';
+    ctx.fillRect(cx - 6, cy - 4, 3, 3);
+    ctx.fillStyle = '#ffcd29';
+    ctx.fillRect(cx - 1, cy - 4, 3, 3);
+    ctx.fillStyle = '#2a6a42';
+    ctx.fillRect(cx + 4, cy - 4, 3, 3);
+    // warning diagonal stripes
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    for (let i = 0; i < 6; i++) {
+      ctx.fillRect(cx - 13 + i*5, cy + 4, 2, 6);
+    }
+    // InGen-ish label
+    ctx.fillStyle = '#f4e7c1';
+    ctx.font = '7px monospace';
+    ctx.fillText('INGEN', cx - 12, cy + 2);
+  }
+}
+
+function drawPlayer() {
+  const p = state.player;
+  const cx = p.x - state.camera.x;
+  const cy = p.y - state.camera.y;
+
+  // World-space shadow
+  ctx.save();
+  ctx.globalAlpha = 0.5;
+  const sg = ctx.createRadialGradient(cx + 2, cy + 4, 0, cx + 2, cy + 4, 16);
+  sg.addColorStop(0, 'rgba(0,0,0,0.8)');
+  sg.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = sg;
+  ctx.beginPath(); ctx.ellipse(cx + 2, cy + 4, 14, 6, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  if (p.iframes > 0 && Math.floor(p.iframes/60) % 2 === 0) ctx.globalAlpha = 0.4;
+  if (p.flash > 0) ctx.filter = 'brightness(2)';
+  ctx.rotate(p.angle);
+
+  // body — tactical vest with gradient
+  const vestGrad = ctx.createRadialGradient(-2, -2, 0, 0, 0, 14);
+  vestGrad.addColorStop(0, '#8a7a4f');
+  vestGrad.addColorStop(0.7, '#6b5d3f');
+  vestGrad.addColorStop(1, '#3d3420');
+  ctx.fillStyle = vestGrad;
+  ctx.beginPath(); ctx.ellipse(0, 0, 12, 10, 0, 0, Math.PI*2); ctx.fill();
+
+  // vest pockets
+  ctx.fillStyle = '#3a301c';
+  ctx.fillRect(-8, -3, 5, 5);
+  ctx.fillRect(3, -3, 5, 5);
+  ctx.strokeStyle = '#ffb703'; ctx.lineWidth = 0.5;
+  ctx.strokeRect(-8, -3, 5, 5);
+  ctx.strokeRect(3, -3, 5, 5);
+
+  // backpack
+  ctx.fillStyle = '#2d1e10';
+  ctx.beginPath(); ctx.ellipse(-9, 0, 5, 7, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#d62828';
+  ctx.fillRect(-11, -1, 3, 2); // patch
+
+  // head (cap)
+  ctx.fillStyle = '#ffb703';
+  ctx.beginPath(); ctx.arc(4, 0, 6, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#3d2817';
+  ctx.beginPath(); ctx.arc(4, 0, 5, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#ffb703';
+  ctx.beginPath(); ctx.arc(8, 0, 3.5, -Math.PI/2, Math.PI/2); ctx.fill();
+  // cap logo
+  ctx.fillStyle = '#000';
+  ctx.fillRect(2, -1, 4, 2);
+
+  // rifle — more detailed
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(8, -2, 16, 4);
+  ctx.fillStyle = '#3a3a3a';
+  ctx.fillRect(20, -0.8, 6, 1.6);
+  ctx.fillStyle = '#666';
+  ctx.fillRect(10, -2, 2, 4);  // scope
+  ctx.fillStyle = '#ffcd29';
+  ctx.fillRect(16, -2.3, 1, 0.8); // laser sight dot
+
+  // muzzle flash when shooting
+  if (p.shootCd > p.fireRate - 80) {
+    const flashSize = 4 + Math.random() * 5;
+    ctx.fillStyle = 'rgba(255, 200, 80, 0.5)';
+    ctx.beginPath(); ctx.arc(27, 0, flashSize * 2, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#ffe066';
+    ctx.beginPath(); ctx.arc(27, 0, flashSize, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(27, 0, flashSize * 0.4, 0, Math.PI*2); ctx.fill();
+  }
+
+  ctx.restore();
+
+  // Reload indicator
+  const rl = p.reloading[p.weapon];
+  if (rl > 0) {
+    const maxRl = WEAPONS[p.weapon].reloadTime * p.reloadMul;
+    ctx.strokeStyle = '#ffb703'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(cx, cy - 24, 12, -Math.PI/2,
+      -Math.PI/2 + Math.PI*2 * (1 - rl/maxRl));
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255, 183, 3, 0.2)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(cx, cy - 24, 12, 0, Math.PI*2); ctx.stroke();
+  }
+}
+
+function drawEnemy(e) {
+  const t = e.tpl;
+
+  // Windup indicator ring (charge or special) — beneath the body
+  if (e.windupT > 0 || e.specialWindup > 0) {
+    const wT = e.windupT > 0 ? e.windupT : e.specialWindup;
+    const wMax = e.windupT > 0 ? (e.chargeParams?.windup || 500) : (t.thagomizer?.windup || 500);
+    const prog = 1 - wT / wMax;
+    ctx.save();
+    const cx = e.x - state.camera.x, cy = e.y - state.camera.y;
+    ctx.strokeStyle = '#ffcd29';
+    ctx.globalAlpha = 0.7;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(cx, cy, e.r + 8, -Math.PI/2, -Math.PI/2 + Math.PI*2 * prog);
+    ctx.stroke();
+    ctx.strokeStyle = '#ff8500'; ctx.lineWidth = 1; ctx.globalAlpha = 0.4;
+    ctx.beginPath(); ctx.arc(cx, cy, e.r + 14, 0, Math.PI*2); ctx.stroke();
+    ctx.restore();
+  }
+
+  // Aggro indicator for herbivores
+  if (!t.carnivore && e.aggroed && !e.dying) {
+    ctx.save();
+    ctx.translate(e.x - state.camera.x, e.y - state.camera.y - e.r - 28);
+    const pulse = 0.7 + Math.sin(Date.now() * 0.01) * 0.3;
+    ctx.fillStyle = `rgba(214, 40, 40, ${pulse})`;
+    ctx.font = 'bold 18px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('!', 0, 0);
+    ctx.restore();
+  }
+  // call draw (which also calls ctx.save/restore)
+  t.draw(e);
+
+  // HP bar for non-boss enemies (below full HP)
+  if (!t.boss && e.hp < e.maxHp && !e.dying) {
+    const bx = e.x - state.camera.x - e.r;
+    const by = e.y - state.camera.y - e.r - 10;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(bx - 1, by - 1, e.r*2 + 2, 6);
+    ctx.fillStyle = t.carnivore ? '#d62828' : (e.aggroed ? '#d62828' : '#8fbc8f');
+    ctx.fillRect(bx, by, (e.r*2) * (e.hp/e.maxHp), 4);
+  }
+
+  // Name label (only if not dying)
+  if (!e.dying && !t.boss) drawEnemyLabel(e);
+  else if (!e.dying && t.boss) drawBossLabel(e);
+}
+
+function drawEnemyLabel(e) {
+  const t = e.tpl;
+  const lx = e.x - state.camera.x;
+  const ly = e.y - state.camera.y - e.r - (e.hp < e.maxHp ? 22 : 14);
+  ctx.save();
+  ctx.font = '14px "VT323", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const txt = t.name;
+  const w = ctx.measureText(txt).width + 12;
+  // color by threat state
+  const dangerous = t.carnivore || e.aggroed;
+  const borderCol = dangerous ? '#d62828' : '#8fbc8f';
+  const bgCol = dangerous ? 'rgba(60,10,10,0.8)' : 'rgba(10,30,20,0.8)';
+  // backplate
+  ctx.fillStyle = bgCol;
+  ctx.fillRect(lx - w/2, ly - 9, w, 16);
+  ctx.strokeStyle = borderCol; ctx.lineWidth = 1;
+  ctx.strokeRect(lx - w/2 + 0.5, ly - 8.5, w - 1, 15);
+  // tiny indicator dot on left
+  ctx.fillStyle = dangerous ? '#ff6b6b' : '#8fbc8f';
+  ctx.beginPath(); ctx.arc(lx - w/2 + 5, ly - 1, 2, 0, Math.PI*2); ctx.fill();
+  // text
+  ctx.fillStyle = '#f4e7c1';
+  ctx.fillText(txt, lx + 3, ly);
+  ctx.restore();
+}
+
+function drawBossLabel(e) {
+  // Boss gets a bigger, emphatic label
+  const t = e.tpl;
+  const lx = e.x - state.camera.x;
+  const ly = e.y - state.camera.y - e.r - 18;
+  ctx.save();
+  ctx.font = 'bold 16px "VT323", monospace';
+  ctx.textAlign = 'center';
+  const w = ctx.measureText(t.name).width + 20;
+  ctx.fillStyle = 'rgba(60,0,0,0.85)';
+  ctx.fillRect(lx - w/2, ly - 10, w, 20);
+  // double border
+  ctx.strokeStyle = '#d62828'; ctx.lineWidth = 2;
+  ctx.strokeRect(lx - w/2 + 1, ly - 9, w - 2, 18);
+  ctx.strokeStyle = '#ffcd29'; ctx.lineWidth = 1;
+  ctx.strokeRect(lx - w/2 - 3, ly - 13, w + 6, 26);
+  ctx.fillStyle = '#ffe0e0';
+  ctx.shadowColor = '#d62828'; ctx.shadowBlur = 10;
+  ctx.fillText(t.name, lx, ly + 1);
+  ctx.restore();
+}
+
+function drawShockwaves() {
+  const list = state.shockwaves || [];
+  for (const sw of list) {
+    const x = sw.x - state.camera.x, y = sw.y - state.camera.y;
+    const t01 = sw.life / sw.maxLife;
+    const alpha = t01;
+    ctx.save();
+    // outer dust ring
+    ctx.strokeStyle = `rgba(138, 109, 59, ${alpha * 0.7})`;
+    ctx.lineWidth = 8;
+    ctx.beginPath(); ctx.arc(x, y, sw.r + 4, 0, Math.PI*2); ctx.stroke();
+    // inner bright shock
+    ctx.strokeStyle = `rgba(255, 205, 41, ${alpha * 0.95})`;
+    ctx.lineWidth = 4;
+    ctx.shadowColor = '#ff8500';
+    ctx.shadowBlur = 16 * alpha;
+    ctx.beginPath(); ctx.arc(x, y, sw.r, 0, Math.PI*2); ctx.stroke();
+    // crack lines
+    ctx.strokeStyle = `rgba(60, 30, 10, ${alpha * 0.9})`;
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 6; i++) {
+      const a = i * Math.PI / 3 + sw.maxLife * 0.001;
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(a) * sw.r * 0.3, y + Math.sin(a) * sw.r * 0.3);
+      ctx.lineTo(x + Math.cos(a) * sw.r, y + Math.sin(a) * sw.r);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+function drawProjectiles() {
+  for (const pr of state.projectiles) {
+    const x = pr.x - state.camera.x, y = pr.y - state.camera.y;
+    if (pr.friendly) {
+      const col = pr.color || '#ffe066';
+      // glow trail
+      ctx.strokeStyle = col; ctx.globalAlpha = 0.35; ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - pr.vx * 2.8, y - pr.vy * 2.8);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      // bright core line
+      ctx.strokeStyle = col; ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - pr.vx * 1.6, y - pr.vy * 1.6);
+      ctx.stroke();
+      // hot tip
+      ctx.fillStyle = '#fff';
+      ctx.shadowColor = col; ctx.shadowBlur = 7;
+      ctx.beginPath(); ctx.arc(x, y, pr.r * 0.7 + 0.5, 0, Math.PI*2); ctx.fill();
+      ctx.shadowBlur = 0;
+    } else if (pr.spike) {
+      // bone spike — elongated shard along travel direction
+      const a = Math.atan2(pr.vy, pr.vx);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(a);
+      ctx.fillStyle = '#2a1a10';
+      ctx.beginPath();
+      ctx.moveTo(-10, 2); ctx.lineTo(8, 0); ctx.lineTo(-10, -2); ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = pr.color || '#f4e7c1';
+      ctx.beginPath();
+      ctx.moveTo(-8, 2); ctx.lineTo(8, 0); ctx.lineTo(-8, -2); ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#d62828';
+      ctx.fillRect(5, -0.5, 3, 1);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = pr.color || '#00ff66';
+      ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 10;
+      ctx.beginPath(); ctx.arc(x, y, pr.r, 0, Math.PI*2); ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+}
+
+function drawParticles() {
+  for (const p of state.particles) {
+    const alpha = Math.max(0, p.life / p.maxLife);
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = alpha;
+    ctx.fillRect(p.x - state.camera.x - p.size/2, p.y - state.camera.y - p.size/2, p.size, p.size);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawPickups() {
+  for (const pk of state.pickups) {
+    const x = pk.x - state.camera.x;
+    const y = pk.y - state.camera.y + Math.sin(pk.bob) * 3;
+    const boss = !!pk.boss;
+    const r = boss ? 9 : 6;
+    ctx.save();
+    // pulsing halo for boss orbs
+    if (boss) {
+      const pulse = 0.5 + 0.5 * Math.sin(Date.now() * 0.006 + pk.bob);
+      ctx.fillStyle = `rgba(255, 205, 41, ${pulse * 0.35})`;
+      ctx.beginPath(); ctx.arc(x, y, r + 8 + pulse * 4, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.shadowColor = boss ? '#ffcd29' : '#00ffcc';
+    ctx.shadowBlur = boss ? 16 : 10;
+    ctx.fillStyle = boss ? '#ffd23f' : '#00ffcc';
+    ctx.beginPath();
+    ctx.moveTo(x, y - r);
+    ctx.lineTo(x + r * 0.8, y - r * 0.3);
+    ctx.lineTo(x + r * 0.55, y + r * 0.85);
+    ctx.lineTo(x - r * 0.55, y + r * 0.85);
+    ctx.lineTo(x - r * 0.8, y - r * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.font = `bold ${boss ? 10 : 8}px monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(boss ? '★' : 'D', x, y + (boss ? 1 : 2));
+    ctx.restore();
+  }
+}
+
+function drawDoor() {
+  if (!state.doorOpen) return;
+  const dx = MAP_W/2 - state.camera.x;
+  const dy = MAP_H - TILE - 20 - state.camera.y;
+  const pulse = 0.6 + Math.sin(Date.now() * 0.005) * 0.4;
+  ctx.save();
+  ctx.shadowColor = '#00ff66'; ctx.shadowBlur = 30 * pulse;
+  ctx.strokeStyle = '#00ff66'; ctx.lineWidth = 3;
+  ctx.strokeRect(dx - 30, dy - 30, 60, 60);
+  ctx.strokeStyle = '#ffb703'; ctx.lineWidth = 1;
+  ctx.strokeRect(dx - 36, dy - 36, 72, 72);
+  ctx.fillStyle = `rgba(0, 255, 102, ${pulse * 0.2})`;
+  ctx.fillRect(dx - 30, dy - 30, 60, 60);
+  ctx.fillStyle = '#00ff66';
+  ctx.font = 'bold 14px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('EXIT ▼', dx, dy + 4);
+  ctx.restore();
+}
+
+function drawTransition() {
+  const tr = state.transition;
+  let alpha = 1;
+  if (tr.phase === 'in') alpha = Math.min(1, tr.t / tr.dIn);
+  else if (tr.phase === 'out') alpha = 1 - Math.min(1, tr.t / tr.dOut);
+
+  // Backdrop
+  ctx.save();
+  ctx.globalAlpha = alpha * 0.92;
+  const g = ctx.createRadialGradient(W/2, H/2, 40, W/2, H/2, Math.max(W, H) * 0.7);
+  g.addColorStop(0, 'rgba(13, 79, 60, 0.6)');
+  g.addColorStop(1, 'rgba(0, 0, 0, 0.98)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  // Horizontal warning stripes (top + bottom) swipe in
+  const stripeAlpha = alpha;
+  ctx.globalAlpha = stripeAlpha;
+  const stripeY1 = H * 0.22, stripeY2 = H * 0.78;
+  for (let x = 0; x < W + 60; x += 28) {
+    const barX = x - ((Date.now() * 0.06) % 28);
+    ctx.fillStyle = tr.isBoss ? '#d62828' : '#ffb703';
+    ctx.fillRect(barX, stripeY1, 16, 3);
+    ctx.fillRect(barX, stripeY2, 16, 3);
+  }
+
+  // Text block
+  const easeIn = tr.phase === 'in' ? Math.pow(tr.t / tr.dIn, 0.6) : 1;
+  const easeOut = tr.phase === 'out' ? (1 - tr.t / tr.dOut) : 1;
+  const appear = tr.phase === 'in' ? easeIn : (tr.phase === 'out' ? easeOut : 1);
+  ctx.globalAlpha = appear;
+
+  // Stencil number on left
+  ctx.save();
+  ctx.font = 'bold 180px "Rubik Mono One", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(255, 183, 3, 0.08)';
+  const offY = (1 - appear) * 40;
+  ctx.fillText(String(tr.floor).padStart(2,'0'), W/2, H/2 + offY);
+  ctx.restore();
+
+  // Sector badge
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '14px "VT323", monospace';
+  ctx.fillStyle = tr.isBoss ? '#d62828' : '#ffb703';
+  ctx.globalAlpha = appear * 0.9;
+  ctx.fillText('◆ ' + tr.biomeEn + ' ◆', W/2, H/2 - 100 + offY);
+  ctx.restore();
+
+  // Main title (Korean)
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 46px "Rubik Mono One", "VT323", monospace';
+  ctx.shadowColor = tr.isBoss ? '#d62828' : '#ff8500';
+  ctx.shadowBlur = 24;
+  ctx.fillStyle = tr.isBoss ? '#ffe0e0' : '#f4e7c1';
+  ctx.globalAlpha = appear;
+  ctx.fillText(tr.title, W/2, H/2 - 20 + offY*0.3);
+  ctx.restore();
+
+  // Sector code
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.font = '18px "VT323", monospace';
+  ctx.fillStyle = '#ffb703';
+  ctx.globalAlpha = appear * 0.75;
+  ctx.fillText('SECTOR ' + String(tr.floor).padStart(2,'0') + ' · ' + tr.sectorEn, W/2, H/2 + 22);
+  ctx.restore();
+
+  // Flavor
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.font = '20px "VT323", monospace';
+  ctx.fillStyle = '#8fbc8f';
+  ctx.globalAlpha = appear * 0.85;
+  ctx.fillText(tr.flavor, W/2, H/2 + 60);
+  ctx.restore();
+
+  // Boss tag — prominent block with boss name itself so no separate alert needed
+  if (tr.isBoss) {
+    const flash = 0.55 + 0.45 * Math.sin(Date.now() * 0.012);
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.globalAlpha = appear * flash;
+
+    // warning stripes inside a band
+    ctx.fillStyle = 'rgba(214, 40, 40, 0.22)';
+    ctx.fillRect(W/2 - 220, H/2 + 90, 440, 48);
+    ctx.strokeStyle = '#d62828'; ctx.lineWidth = 2;
+    ctx.strokeRect(W/2 - 220, H/2 + 90, 440, 48);
+
+    ctx.font = 'bold 18px "Rubik Mono One", monospace';
+    ctx.fillStyle = '#ffcd29';
+    ctx.shadowColor = '#d62828'; ctx.shadowBlur = 12;
+    ctx.fillText('⚠   LARGE ASSET BREACH   ⚠', W/2, H/2 + 108);
+    // boss name subtitle
+    ctx.font = 'bold 22px "Rubik Mono One", monospace';
+    ctx.fillStyle = '#fff';
+    ctx.shadowColor = '#d62828'; ctx.shadowBlur = 18;
+    ctx.fillText(state.bossRef ? state.bossRef.tpl.name : '', W/2, H/2 + 135);
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
+function drawTitleBackdrop() {
+  // animated jungle silhouette
+  ctx.fillStyle = '#050a06';
+  ctx.fillRect(0, 0, W, H);
+  const t = Date.now() * 0.0005;
+  for (let i = 0; i < 20; i++) {
+    const x = (i * W/20 + Math.sin(t + i) * 20) % W;
+    const h = 80 + Math.sin(i * 1.3) * 40;
+    ctx.fillStyle = '#0a1a10';
+    ctx.fillRect(x, H - h, W/20 + 5, h);
+  }
+  // eyes in the dark
+  for (let i = 0; i < 4; i++) {
+    const x = (i * W/4 + Math.sin(t*2 + i) * 30);
+    const y = H - 50 - i * 20;
+    ctx.fillStyle = '#ffcd29';
+    ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + 10, y, 3, 0, Math.PI*2); ctx.fill();
+  }
+}
+
+// ============================================================
+//   HUD
+// ============================================================
+function updateHUD() {
+  const p = state.player;
+  if (!p) return;
+  document.getElementById('hp-text').textContent = Math.max(0, Math.round(p.hp));
+  document.getElementById('hp-fill').style.width = (p.hp/p.maxHp*100) + '%';
+  document.getElementById('floor-text').textContent = String(state.floor).padStart(2,'0');
+  document.getElementById('dna-text').textContent = state.dna;
+
+  const wk = p.weapon;
+  const mx = maxAmmoFor(p, wk);
+  const ammoText = p.reloading[wk] > 0 ? 'R...' : p.ammo[wk];
+  document.getElementById('ammo-text').textContent = ammoText;
+  document.getElementById('ammo-fill').style.width = (p.ammo[wk]/mx*100) + '%';
+
+  // boss hp
+  if (state.bossRef && !state.bossRef.dying) {
+    document.getElementById('boss-hp').classList.add('show');
+    document.getElementById('boss-name').textContent = state.bossRef.tpl.name;
+    document.getElementById('boss-fill').style.width = (state.bossRef.hp/state.bossRef.maxHp*100) + '%';
+  } else {
+    document.getElementById('boss-hp').classList.remove('show');
+  }
+
+  updateWeaponBar();
+}
+
+function updateWeaponBar() {
+  const p = state.player;
+  if (!p) return;
+  for (const wk of Object.keys(WEAPONS)) {
+    const btn = document.querySelector(`.wbtn[data-w="${wk}"]`);
+    if (!btn) continue;
+    const mx = maxAmmoFor(p, wk);
+    const ammoEl = btn.querySelector('.wammo');
+    if (p.reloading[wk] > 0) {
+      const prog = Math.round((1 - p.reloading[wk] / (WEAPONS[wk].reloadTime * p.reloadMul)) * 100);
+      ammoEl.textContent = prog + '%';
+      ammoEl.style.color = '#ff8500';
+    } else {
+      ammoEl.textContent = `${p.ammo[wk]}/${mx}`;
+      ammoEl.style.color = '';
+    }
+    btn.classList.toggle('active', p.weapon === wk);
+    btn.classList.toggle('empty', p.ammo[wk] === 0 && p.reloading[wk] === 0);
+  }
+}
+
+// ============================================================
+//   START / RESET
+// ============================================================
+function startGame() {
+  document.getElementById('screen-title').classList.add('hidden');
+  state.scene = 'play';
+  state.floor = 1;
+  state.dna = 0;
+  state.kills = 0;
+  state.player = newPlayer();
+  refreshWeaponsBar();
+  generateFloor(1);
+}
+
+function resetGame() {
+  document.getElementById('screen-dead').classList.add('hidden');
+  document.getElementById('screen-win').classList.add('hidden');
+  document.getElementById('screen-upgrade').classList.add('hidden');
+  startGame();
+}
+
+// Main loop
+requestAnimationFrame(tick);
+
+// prevent pinch zoom
+document.addEventListener('gesturestart', e => e.preventDefault());
+document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+</script>
+</body>
+</html>
